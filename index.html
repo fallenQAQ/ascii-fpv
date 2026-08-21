@@ -2,14 +2,16 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>ASCII FPV · 楼宇穿越</title>
 <style>
   html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden;
-    font-family:"Cascadia Mono","Consolas","DejaVu Sans Mono","Courier New",monospace;color:#7dffb0}
-  #screen{display:block;position:absolute;left:0;top:0;background:#000}
+    font-family:"Cascadia Mono","Consolas","DejaVu Sans Mono","Courier New",monospace;color:#7dffb0;
+    touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent}
+  #screen{display:block;position:absolute;left:0;top:0;background:#000;touch-action:none}
   #overlay{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;
-    background:rgba(0,0,0,.80);z-index:10;cursor:pointer}
+    background:rgba(0,0,0,.80);z-index:10;cursor:pointer;touch-action:none}
   #panel{border:1px solid #1f7a4d;padding:20px 26px;max-width:660px;background:#000806;
     box-shadow:0 0 40px #063d24 inset,0 0 30px #021;line-height:1.75;font-size:14px}
   #panel h1{margin:0 0 4px;font-size:20px;color:#9dffcb;letter-spacing:3px}
@@ -28,7 +30,7 @@
 <div id="overlay"><div id="panel">
   <h1>ASCII&nbsp;FPV&nbsp;&nbsp;楼宇穿越</h1>
   <h2>全部画面由彩色 ASCII 字符排列而成 · 非真 3D 渲染</h2>
-  <table>
+  <table id="kbHelp">
     <tr><td><kbd>W</kbd> / <kbd>S</kbd></td><td>减小 / 增加俯仰角（±45° 限幅）</td></tr>
     <tr><td><kbd>A</kbd> / <kbd>D</kbd></td><td>滚转角速率控制（±45° 限幅）</td></tr>
     <tr><td><kbd>Z</kbd> / <kbd>X</kbd></td><td>加速 / 减速（10 ~ 50 m/s）</td></tr>
@@ -36,9 +38,14 @@
     <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>字符密度（分辨率）</td></tr>
     <tr><td><kbd>H</kbd> / <kbd>C</kbd> / <kbd>P</kbd></td><td>HUD 开关 / 碰撞开关 / 暂停</td></tr>
   </table>
+  <table id="touchHelp" style="display:none">
+    <tr><td><b>单指按住滑动</b></td><td>屏幕任意处即摇杆：左右滑＝滚转，上下滑＝俯仰（上滑俯冲 / 下滑爬升），偏移越大速率越快</td></tr>
+    <tr><td><b>双指上下滑动</b></td><td>加速 / 减速（10 ~ 50 m/s）</td></tr>
+    <tr><td><b>轻点屏幕</b></td><td>暂停 / 继续（坠机后重生）</td></tr>
+  </table>
   <div class="dim">滚转 45° 时偏航角速度线性到达 90°/s，构成协调转弯。<br>
   灰蓝色 <b>#</b> 为楼房（琥珀色为亮着的窗户），绿色 <b>&amp;</b> 为树木，灰色 <b>=</b> 与黄色虚线为道路，天空为黑底。</div>
-  <div class="go">▶ 点击任意处 / 按任意键 起飞</div>
+  <div class="go" id="goLine">▶ 点击任意处 / 按任意键 起飞</div>
 </div></div>
 <script>
 'use strict';
@@ -205,6 +212,16 @@ var COLS = 0, ROWS = 0, cellW = 10, cellH = 18, offX = 0, offY = 0, baseY = 14;
 var FONTSPEC = '16px ' + FONT, LSPACE = '0px', hasLS = ('letterSpacing' in ctx);
 var chars, colr, zbuf;
 var targetCols = 152;
+// 触屏设备（手机 / 平板）：降低字符密度 → 单个字符更大、性能更稳
+var IS_TOUCH = false;
+if (typeof window !== 'undefined') {
+  IS_TOUCH = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches
+    : (('ontouchstart' in window) || ((typeof navigator !== 'undefined' ? navigator.maxTouchPoints : 0) | 0) > 0);
+  if (IS_TOUCH) {
+    var touchMin = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+    if (touchMin > 0 && touchMin < 760) targetCols = 96;
+  }
+}
 var FOVX = 86 * DEG, NEAR = 0.45, VIEW = 620, FOGD = 420;
 var cxF = 0, cyF = 0, sxS = 1, syS = 1, hTan = 1, vTan = 1;
 
@@ -621,6 +638,14 @@ function drawHUD() {
   }
   hudCh(cx + Math.round(roll / 45 * sc), by - 1, 94, Math.abs(roll) > 44 ? C_AMB : C_HUD);
 
+  // 触屏虚拟摇杆偏移指示（琥珀色轨迹，末端 'o' 为当前杆位）
+  if (stickId !== null && (stickVX || stickVY)) {
+    var jx = Math.round(stickVX * 9), jy = Math.round(stickVY * 6);
+    var jn = Math.max(Math.abs(jx), Math.abs(jy), 1);
+    for (var ji = 1; ji <= jn; ji++)
+      hudCh(cx + Math.round(jx * ji / jn), cy + Math.round(jy * ji / jn), ji === jn ? 111 : 46, C_AMB);
+  }
+
   // 底部状态栏
   hudRow(ROWS - 3, 45, C_HUD2);
   hudRow(ROWS - 2, 32, C_HUD2);
@@ -630,8 +655,10 @@ function drawHUD() {
     '   VS ' + sgnNum(spd * Math.sin(pitch * DEG)) + ' M/S   DIST ' + (flown / 1000).toFixed(2) +
     ' KM   BEST ' + (best / 1000).toFixed(2) + ' KM';
   hudStrOp(1, ROWS - 2, line.substring(0, COLS - 2), C_HUD);
-  var hint = 'W/S PITCH   A/D ROLL RATE   Z/X THROTTLE   R RESET   [ ] DENSITY   H HUD   C CRASH:' +
-    (collideOn ? 'ON ' : 'OFF') + '   P PAUSE';
+  var hint = IS_TOUCH
+    ? 'SWIPE: PITCH/ROLL   2-FINGER: THROTTLE   TAP: PAUSE / RESPAWN'
+    : 'W/S PITCH   A/D ROLL RATE   Z/X THROTTLE   R RESET   [ ] DENSITY   H HUD   C CRASH:' +
+      (collideOn ? 'ON ' : 'OFF') + '   P PAUSE';
   hudStrOp(1, ROWS - 1, hint.substring(0, COLS - 2), C_HUD2);
   var tag = COLS + 'x' + ROWS + ' CHARS  ' + pad(fpsVal, 3) + ' FPS';
   if (COLS - 2 - tag.length > hint.length + 3) hudStrOp(COLS - 2 - tag.length, ROWS - 1, tag, C_HUD2);
@@ -659,7 +686,7 @@ function drawCrash() {
   hudStrOp(x + 9, y + 1, "* CRASHED *", C_WARN);
   hudStrOp(x + 4, y + 2, "DIST " + pad((flown / 1000).toFixed(2), 6) + " KM", C_WHT);
   hudStrOp(x + 4, y + 3, "BEST " + pad((best / 1000).toFixed(2), 6) + " KM", C_WHT);
-  hudStrOp(x + 5, y + 5, "PRESS  R  TO RESPAWN", C_AMB);
+  hudStrOp(x + (IS_TOUCH ? 8 : 5), y + 5, IS_TOUCH ? "TAP TO RESPAWN" : "PRESS  R  TO RESPAWN", C_AMB);
 }
 
 //------------------------- 输出到画布 -------------------------
@@ -697,16 +724,17 @@ function render() {
 var PITCH_RATE = 28, ROLL_RATE = 72, ACC = 9, LIMIT = 45, YAW_AT_LIMIT = 90;
 var keys = Object.create(null);
 function physics(dt) {
-  if (keys.KeyA) roll -= ROLL_RATE * dt;
-  if (keys.KeyD) roll += ROLL_RATE * dt;
+  // 键盘输入为 1；触屏摇杆输入为 0~1 模拟量（按偏移比例控制速率）
+  if (keys.KeyA) roll -= ROLL_RATE * keys.KeyA * dt;
+  if (keys.KeyD) roll += ROLL_RATE * keys.KeyD * dt;
   roll = clamp(roll, -LIMIT, LIMIT);
-  if (keys.KeyW) pitch -= PITCH_RATE * dt;
-  if (keys.KeyS) pitch += PITCH_RATE * dt;
+  if (keys.KeyW) pitch -= PITCH_RATE * keys.KeyW * dt;
+  if (keys.KeyS) pitch += PITCH_RATE * keys.KeyS * dt;
   pitch = clamp(pitch, -LIMIT, LIMIT);
   // 线性协调转弯：滚转 45° ⇒ 偏航 90°/s
   yaw = mod(yaw + (roll / LIMIT) * YAW_AT_LIMIT * dt, 360);
-  if (keys.KeyZ) spd += ACC * dt;
-  if (keys.KeyX) spd -= ACC * dt;
+  if (keys.KeyZ) spd += ACC * keys.KeyZ * dt;
+  if (keys.KeyX) spd -= ACC * keys.KeyX * dt;
   spd = clamp(spd, 10, 50);
 
   updateBasis();
@@ -768,9 +796,88 @@ if (typeof window !== 'undefined' && window.addEventListener) {
     else if (code === 'BracketRight') { targetCols = clamp(targetCols + 16, 64, 264); setupGrid(); }
   });
   window.addEventListener('keyup', function (e) { keys[ALIAS[e.code] || e.code] = 0; });
-  window.addEventListener('blur', function () { keys = Object.create(null); });
+  window.addEventListener('blur', function () { keys = Object.create(null); stickId = null; thrId = null; stickVX = 0; stickVY = 0; });
   window.addEventListener('resize', function () { setupGrid(); });
   if (overlay) overlay.addEventListener('mousedown', function () { start(); });
+}
+
+//------------------------- 触屏控制（移动端：滑动屏幕任意处） -------------------------
+// 单指按住拖动 = 虚拟摇杆：左右→滚转，上下→俯仰（上滑俯冲 / 下滑爬升，同 W/S），偏移映射 0~1 模拟量
+// 双指上下拖动 = 油门；轻点 = 暂停 / 继续（坠机后重生）
+var stickId = null, stickX0 = 0, stickY0 = 0, stickT0 = 0, stickMoved = false, stickTapOk = false;
+var stickVX = 0, stickVY = 0;
+var thrId = null, thrY0 = 0;
+var STICK_DEAD = 14, STICK_FULL = 90, THR_DEAD = 12, THR_FULL = 70;   // 死区 / 满偏移（CSS 像素）
+function touchAxis(v, dead, full) {
+  var s = v < 0 ? -1 : 1, m = Math.abs(v);
+  return m <= dead ? 0 : s * Math.min(1, (m - dead) / (full - dead));
+}
+function stickClear() { keys.KeyW = 0; keys.KeyS = 0; keys.KeyA = 0; keys.KeyD = 0; stickVX = 0; stickVY = 0; }
+function throttleClear() { keys.KeyZ = 0; keys.KeyX = 0; }
+
+if (typeof window !== 'undefined' && window.addEventListener) {
+  // 触屏设备：覆盖层显示手势说明
+  if (IS_TOUCH) {
+    var kbTbl = document.getElementById('kbHelp'), tcTbl = document.getElementById('touchHelp');
+    if (kbTbl) kbTbl.style.display = 'none';
+    if (tcTbl) tcTbl.style.display = '';
+    var goLine = document.getElementById('goLine');
+    if (goLine) goLine.textContent = '▶ 点击任意处 起飞 · 按住拖动即可操控';
+  }
+
+  window.addEventListener('touchstart', function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (stickId === null) {                 // 首个触点 → 虚拟摇杆
+        stickId = t.identifier; stickX0 = t.clientX; stickY0 = t.clientY;
+        stickT0 = e.timeStamp; stickMoved = false; stickTapOk = started;
+      } else if (thrId === null) {            // 第二个触点 → 油门
+        thrId = t.identifier; thrY0 = t.clientY;
+      }
+    }
+    start();
+    e.preventDefault();                       // 阻止滚动 / 缩放 / 合成鼠标事件
+  }, { passive: false });
+
+  window.addEventListener('touchmove', function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier === stickId) {
+        var dx = t.clientX - stickX0, dy = t.clientY - stickY0;
+        if (Math.abs(dx) > STICK_DEAD || Math.abs(dy) > STICK_DEAD) stickMoved = true;
+        stickVX = touchAxis(dx, STICK_DEAD, STICK_FULL);
+        stickVY = touchAxis(dy, STICK_DEAD, STICK_FULL);
+        keys.KeyA = stickVX < 0 ? -stickVX : 0;
+        keys.KeyD = stickVX > 0 ? stickVX : 0;
+        keys.KeyW = stickVY < 0 ? -stickVY : 0;   // 上滑推杆 → 俯冲（同 W）
+        keys.KeyS = stickVY > 0 ? stickVY : 0;    // 下滑拉杆 → 爬升（同 S）
+      } else if (t.identifier === thrId) {
+        var ty = touchAxis(t.clientY - thrY0, THR_DEAD, THR_FULL);
+        keys.KeyZ = ty < 0 ? -ty : 0;             // 双指上滑 → 加速
+        keys.KeyX = ty > 0 ? ty : 0;              // 双指下滑 → 减速
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  function touchEnd(e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier === stickId) {
+        stickId = null; stickClear();
+        if (stickTapOk && !stickMoved && e.timeStamp - stickT0 < 400) {   // 轻点
+          if (crashed) { respawn(); paused = false; }
+          else paused = !paused;
+        }
+      } else if (t.identifier === thrId) {
+        thrId = null; throttleClear();
+      }
+    }
+    if (e.cancelable) e.preventDefault();
+  }
+  window.addEventListener('touchend', touchEnd, { passive: false });
+  window.addEventListener('touchcancel', touchEnd, { passive: false });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });   // iOS 捏合缩放
 }
 
 var acc = 0, last = 0, fpsT = 0, fpsN = 0;
