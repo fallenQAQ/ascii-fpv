@@ -107,11 +107,9 @@
 
   /* ------------------------- 碰撞 ------------------------- */
   var TMP = [0, 0, 0];
-  var hitCalls = 0;
   O.hitBlock = function (blk, ox, oz) {
     var arr = blk.obs;
     if (!arr || !arr.length) return false;
-    hitCalls++;
     for (var i = 0; i < arr.length; i++) {
       var o = arr[i];
       pos(o, ox, oz, TMP);
@@ -121,8 +119,6 @@
     }
     return false;
   };
-  O.hitCalls = function () { return hitCalls; };
-  O.resetHitCalls = function () { hitCalls = 0; };
 
   /* ------------------------- 绘制 ------------------------- */
   function solidMat(idx) { return { pal: idx, chars: P.M_HULL.chars, ramp: '' }; }

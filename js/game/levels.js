@@ -48,8 +48,10 @@
   L.recordClear = function (i, time) {
     if (i + 1 > progress.cleared) progress.cleared = Math.min(i + 1, DEFS.length);
     var b = progress.best[i];
-    if (b === undefined || time < b) progress.best[i] = Math.round(time * 100) / 100;
+    var isRecord = (b === undefined || time < b);
+    if (isRecord) progress.best[i] = Math.round(time * 100) / 100;
     L.save();
+    return isRecord;                       // 供结算界面标注「新纪录」
   };
   L.progressText = function () {
     return t('menu.progress') + ' ' + progress.cleared + '/' + DEFS.length;
@@ -137,6 +139,7 @@
     i = U.clamp(i | 0, 0, DEFS.length - 1);
     if (!L.unlocked(i)) i = Math.min(progress.cleared, DEFS.length - 1);
     current = L.build(i);
+    current.newRecord = false;         // 每次重跑都重新判定新纪录
     S.mode = 'level';
     S.level = i;
     S.gates = current.gates;
@@ -156,30 +159,29 @@
     return L.start(n === null ? 0 : n);
   };
 
-  /* 目标点判定：按顺序穿过光环 */
-  var passedFlash = 0;
+  /* 目标点判定：按顺序穿过光环。
+     先判超时再判穿环：否则「冲过最后一个光环的同时超时」这一帧会既记
+     通关（写下超限的最佳用时）又判失败，进度与画面自相矛盾。 */
   L.update = function () {
     if (S.raceDone || !current) return;
+    if (current.def.time && S.raceTime > current.def.time) {
+      S.crashReason = 4;                 // 超时
+      S.crashed = 4;
+      return;
+    }
     var gt = current.gates[S.gateIndex];
     if (gt) {
       var dx = gt.x - S.camX, dy = gt.y - S.camY, dz = gt.z - S.camZ;
       if (dx * dx + dy * dy + dz * dz <= (gt.r + 2) * (gt.r + 2)) {
         S.gateIndex++;
         S.stats.gates++;
-        passedFlash = 0.8;
         if (S.gateIndex >= current.gates.length) {
           S.raceDone = true;
-          L.recordClear(current.index, S.raceTime);
+          current.newRecord = L.recordClear(current.index, S.raceTime);
         }
       }
     }
-    if (current.def.time && S.raceTime > current.def.time) {
-      S.crashReason = 4;                 // 超时
-      S.crashed = 4;
-    }
   };
-  L.flash = function () { return passedFlash; };
-  L.tick = function (dt) { if (passedFlash > 0) passedFlash -= dt; };
 
   /* ------------------------- 光环绘制 ------------------------- */
   var M_CUR = P.makeMat([255, 190, 70], " ..::==*#%@");     // 当前目标：琥珀
@@ -256,7 +258,8 @@
     if (!c) return '';
     var bt = L.bestTime(c.index);
     var h = '';
-    h += '<div class="stat amber"><span>' + t('result.time') + '</span><b>' + U.fmtTime(S.raceTime) + '</b></div>';
+    h += '<div class="stat amber"><span>' + t('result.time') + '</span><b>' + U.fmtTime(S.raceTime) +
+      (c.newRecord ? ' <span class="badge on">' + t('result.newRecord') + '</span>' : '') + '</b></div>';
     h += '<div class="stat"><span>' + t('result.gates') + '</span><b>' + S.stats.gates + ' / ' + c.gates.length + '</b></div>';
     h += '<div class="stat"><span>' + t('result.dist') + '</span><b>' + (S.flown / 1000).toFixed(2) + ' KM</b></div>';
     if (bt !== null) h += '<div class="stat"><span>' + t('levels.bestLabel') + '</span><b>' + U.fmtTime(bt) + '</b></div>';

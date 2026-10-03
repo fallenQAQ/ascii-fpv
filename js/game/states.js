@@ -91,7 +91,6 @@
       if (S.mode === 'level' && AFP.game.levels) {
         S.raceTime += dt;
         AFP.game.levels.update(dt);
-        AFP.game.levels.tick(dt);
       }
       if (S.crashed) fsm.go('crash');
       else if (S.raceDone && AFP.game.levels) fsm.go('result');
@@ -121,7 +120,8 @@
         else if (fsm.is('pause')) fsm.go('play');
         break;
       case 'respawn':
-        if (fsm.is('crash')) restartRun();
+        /* 暂停面板上的「重新开始」标着 R，这里要让 R 真的有用 */
+        if (fsm.is('crash') || fsm.is('pause')) restartRun();
         else if (fsm.is('play')) PL.respawn(S.mode === 'level' && AFP.game.levels ? AFP.game.levels.startPos() : cfg.START);
         break;
       case 'hud':

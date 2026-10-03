@@ -23,7 +23,6 @@
     fsm.states[name] = handlers || {};
     return fsm;
   };
-  fsm.has = function (name) { return !!fsm.states[name]; };
   fsm.is = function (name) { return fsm.cur === name; };
   fsm.isAny = function () {
     for (var i = 0; i < arguments.length; i++) if (fsm.cur === arguments[i]) return true;
@@ -54,13 +53,6 @@
     fsm.t += dt;
     var s = fsm.states[fsm.cur];
     if (s && s.update) s.update(dt);
-  };
-
-  /* 键盘 / 触屏的统一“动作”都交给当前状态处理 */
-  fsm.key = function (code, ev) {
-    var s = fsm.states[fsm.cur];
-    if (s && s.key && s.key(code, ev)) return true;
-    return false;
   };
 
   /* Esc / 返回键：交给状态自行决定返回哪一层 */

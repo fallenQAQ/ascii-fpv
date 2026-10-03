@@ -107,8 +107,18 @@
     return 0;
   }
 
+  /* 坠机原因码 → i18n 词条。1 撞地 / 2 撞楼 / 3 撞障碍物 / 4 超时。
+     画面兜底提示框与 DOM 面板共用这一份映射，避免两处各写一遍而漏掉某一种。 */
+  function crashReasonKey() {
+    var r = S.crashReason;
+    return r === 2 ? 'crash.building'
+      : r === 3 ? 'crash.obstacle'
+        : r === 4 ? 'crash.timeout'
+          : 'crash.ground';
+  }
+
   AFP.game.player = {
     updateBasis: updateBasis, respawn: respawn, physics: physics, collide: collide,
-    loadBest: loadBest, saveBest: saveBest
+    loadBest: loadBest, saveBest: saveBest, crashReasonKey: crashReasonKey
   };
 })(typeof window !== 'undefined' ? window : globalThis);

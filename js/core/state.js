@@ -74,6 +74,4 @@
   S.keys = Object.create(null);
   /* 统计 */
   S.stats = { crashes: 0, gates: 0, distance: 0, time: 0 };
-
-  S.isCrashed = function () { return !!S.crashed; };
 })(typeof window !== 'undefined' ? window : globalThis);

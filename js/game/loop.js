@@ -30,15 +30,24 @@
     var dt = (now - last) / 1000;
     last = now;
     if (!(dt > 0) || dt > 0.25) dt = 0.016;
-    S.time += dt; S.frame++;
+    S.frame++;
     var fsm = AFP.game.fsm;
     AFP.input.update();
+    /* S.time 是「世界时钟」：障碍物位置完全由它决定，所以它只能在真正
+       模拟世界的时候推进 —— 否则暂停期间气球/飞行器照飞，恢复时可能
+       直接撞在你身上；起飞倒计时同理（说是世界静止，就不能偷偷动）。
+       主菜单的运镜背景需要活的障碍物，因此菜单状态也推进。 */
     if (fsm.is('play')) {
       acc += dt;
       if (acc > 0.12) acc = 0.12;
-      while (acc >= cfg.STEP && fsm.is('play')) { fsm.update(cfg.STEP); acc -= cfg.STEP; }
+      while (acc >= cfg.STEP && fsm.is('play')) {
+        if (S.countdown <= 0) S.time += cfg.STEP;
+        fsm.update(cfg.STEP);
+        acc -= cfg.STEP;
+      }
     } else {
       acc = 0;
+      if (fsm.is('menu')) S.time += dt;
       fsm.update(dt);
     }
     render();
