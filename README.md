@@ -31,11 +31,6 @@
 
 直接双击打开 `index.html`（或起个静态服务器），点击任意处 / 按任意键起飞。
 
-```bash
-# 本地预览
-python3 -m http.server 8000
-# 浏览器打开 http://localhost:8000
-```
 
 ## 来源
 
