@@ -242,8 +242,15 @@
     hudStrOp(1, V.ROWS - 2, fitCells(line, V.COLS - 2), C.C_HUD);
     var hint = AFP.input.hintKey ? t(AFP.input.hintKey) : t('hud.hint.key');
     hudStrOp(1, V.ROWS - 1, fitCells(hint, V.COLS - 2), C.C_HUD2);
-    var tag = V.COLS + 'x' + V.ROWS + ' CHARS  ' + U.pad(S.fpsVal, 3) + ' FPS';
-    if (V.COLS - 2 - tag.length > cellLen(hint) + 3) hudStrOp(V.COLS - 2 - tag.length, V.ROWS - 1, tag, C.C_HUD2);
+    /* 右下角：字符网格尺寸 + 帧率（与设置里的「字符密度」显示同一组数字）。
+       空间不够时先退化成只显示网格尺寸，避免这两个数字对不上或被挤掉。 */
+    var gridTag = V.COLS + 'x' + V.ROWS;
+    var tag = gridTag + ' CHARS  ' + U.pad(S.fpsVal, 3) + ' FPS';
+    if (V.COLS - 2 - tag.length > cellLen(hint) + 3) {
+      hudStrOp(V.COLS - 2 - tag.length, V.ROWS - 1, tag, C.C_HUD2);
+    } else if (V.COLS - 2 - gridTag.length > cellLen(hint) + 3) {
+      hudStrOp(V.COLS - 2 - gridTag.length, V.ROWS - 1, gridTag, C.C_HUD2);
+    }
 
     if (Math.abs(S.roll) > 44.5) hudCenter(cy - 3, t('hud.banklim'), C.C_AMB);
     if (Math.abs(S.pitch) > 44.5) hudCenter(cy + 3, t('hud.pitchlim'), C.C_AMB);

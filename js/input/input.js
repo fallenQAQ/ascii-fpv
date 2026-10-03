@@ -66,11 +66,14 @@
   }
   I.action = action;
 
-  /* 字符密度（分辨率）：[ ] 键 */
+  /* 字符密度：按「实际排出来的列数」增减，设置界面与 HUD 显示同一组数字 */
   function density(delta) {
-    V.targetCols = U.clamp(V.targetCols + delta, 64, 264);
-    AFP.render.grid.setupGrid();
-    if (AFP.ui.settings) AFP.ui.settings.set('density', V.targetCols);
+    var got = AFP.render.grid.setColumns(V.COLS + delta);
+    if (AFP.ui.settings) {
+      AFP.ui.settings.set('density', Math.round(V.targetCols * 100) / 100);
+      AFP.ui.settings.save();
+    }
+    return got;
   }
   I.density = density;
 

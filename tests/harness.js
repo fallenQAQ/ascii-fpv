@@ -47,7 +47,14 @@ function boot(opts) {
     fillRect: function () { ctxCalls.fillRect++; },
     clearRect: function () { },
     fillText: function () { ctxCalls.fillText++; },
-    measureText: function (s) { ctxCalls.measureText++; return { width: String(s).length * 7.2 }; },
+    measureText: function (s) {
+      ctxCalls.measureText++;
+      /* 等宽字体按 0.6em 字宽模拟（与 grid.js 反推字号的公式一致），
+         这样字符密度调节在无头环境里也表现得和浏览器一致 */
+      const m = /([\d.]+)px/.exec(ctx.font);
+      const px = m ? parseFloat(m[1]) : 10;
+      return { width: String(s).length * px * 0.6 };
+    },
     save: function () { }, restore: function () { }, setTransform: function () { },
     beginPath: function () { }, closePath: function () { }, fill: function () { }, stroke: function () { }
   };

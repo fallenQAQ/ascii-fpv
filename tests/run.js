@@ -479,15 +479,54 @@ group('设置', () => {
   AFP.ui.screens.dispatch('stickSens:-');
   eq(St.get('stickSens'), s0, '灵敏度 - 应还原');
 
-  /* 字符密度 */
+  /* 字符密度：以「实际排出来的列数」为准，设置界面与 HUD 右下角
+     必须显示同一组数字（曾经一个是期望列数、一个是实际列数，对不上） */
+  const V = AFP.render.view;
+  const c0 = V.COLS, r0 = V.ROWS;
+  ok(c0 > 40 && r0 > 20, '应有正常网格: ' + c0 + 'x' + r0);
   AFP.ui.screens.dispatch('density:16');
-  eq(AFP.render.view.targetCols, 168, '密度 +16 应生效');
+  ok(V.COLS > c0, '密度 + 应增加实际列数: ' + c0 + ' → ' + V.COLS);
+  ok(Math.abs(V.COLS - (c0 + 16)) <= 8, '实际列数应接近请求值，实际 ' + V.COLS + '（请求 ' + (c0 + 16) + '）');
+  const cUp = V.COLS;
+  const panelHtml = app.doc.getElementById('ui').innerHTML;
+  ok(panelHtml.indexOf(cUp + ' × ' + V.ROWS) >= 0, '设置界面应显示实际 ' + cUp + ' × ' + V.ROWS);
+  /* HUD 右下角用同一组数字 */
+  AFP.render.grid.clear();
+  AFP.render.hud.drawHUD();
+  ok(app.hook.dump().indexOf(cUp + 'x' + V.ROWS) >= 0, 'HUD 右下角应显示同一组网格尺寸 ' + cUp + 'x' + V.ROWS);
   AFP.ui.screens.dispatch('density:-16');
-  eq(AFP.render.view.targetCols, 152, '密度 -16 应还原');
+  ok(V.COLS < cUp, '密度 - 应减少实际列数: ' + cUp + ' → ' + V.COLS);
+  /* 自动档 */
+  AFP.ui.screens.dispatch('density:auto');
+  eq(AFP.ui.settings.get('density'), 0, '自动档应存 0');
+  eq(V.COLS, c0, '自动档应回到默认列数');
+  ok(JSON.parse(app.store['asciifpv.settings']).density === 0, '自动档应持久化');
+  /* 密度选择会持久化（下次启动同一设备得到同一网格） */
+  AFP.ui.screens.dispatch('density:16');
+  const savedDensity = JSON.parse(app.store['asciifpv.settings']).density;
+  ok(savedDensity > 0, '密度应持久化，实际 ' + savedDensity);
+  const cAgain = H.boot({ storage: { 'asciifpv.settings': JSON.stringify({ density: savedDensity }) } });
+  eq(cAgain.AFP.render.view.COLS, cUp, '重启后应还原同一组列数');
 
   /* 返回 */
   AFP.ui.screens.dispatch('back');
   eq(AFP.game.fsm.cur, 'menu', '设置返回主菜单');
+});
+
+group('密度与键盘', () => {
+  const A2 = H.boot();
+  const V2 = A2.AFP.render.view;
+  const before = V2.COLS;
+  A2.dispatch('keydown', { code: 'BracketRight', target: { closest: function () { return null; } }, preventDefault: function () { } });
+  ok(V2.COLS > before, '] 键应增大实际列数: ' + before + ' → ' + V2.COLS);
+  const after = V2.COLS;
+  A2.dispatch('keydown', { code: 'BracketLeft', target: { closest: function () { return null; } }, preventDefault: function () { } });
+  ok(V2.COLS < after, '[ 键应减小实际列数: ' + after + ' → ' + V2.COLS);
+  ok(A2.AFP.ui.settings.get('density') > 0, '键盘调节也应存进设置');
+  /* 网格变化后画面仍能正常渲染 */
+  A2.AFP.game.fsm.go('menu');
+  A2.hook.render();
+  ok(A2.hook.dump().replace(/\s/g, '').length > 200, '改密度后画面仍应正常');
 });
 
 group('设置持久化', () => {

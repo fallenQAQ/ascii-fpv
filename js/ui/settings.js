@@ -56,8 +56,14 @@
     switch (k) {
       case 'lang': AFP.i18n.setLang(vals.lang); break;
       case 'density':
-        if (vals.density) V.targetCols = U.clamp(vals.density, 64, 264);
-        if (AFP.render.grid.setupGrid) AFP.render.grid.setupGrid();
+        /* 0 = 按设备自动；否则存的是「收敛后的期望列数」，
+           而界面与 HUD 显示的始终是真正排出来的 COLS × ROWS */
+        if (vals.density) {
+          V.targetCols = U.clamp(vals.density, V.MIN_COLS, V.MAX_COLS);
+          AFP.render.grid.layout();
+        } else {
+          AFP.render.grid.setAutoColumns();
+        }
         break;
       case 'hud': S.hudOn = !!vals.hud; break;
       case 'collide':
@@ -115,9 +121,10 @@
     h += row(t('settings.density'),
       '<span class="seg">' +
       '<button data-act="density:-16">-</button>' +
-      '<button data-act="density:0" disabled style="min-width:56px">' + V.targetCols + '</button>' +
-      '<button data-act="density:16">+</button></span>',
-      t('settings.density.sub', { c: V.targetCols }));
+      '<button data-act="density:0" disabled style="min-width:78px">' + V.COLS + ' × ' + V.ROWS + '</button>' +
+      '<button data-act="density:16">+</button>' +
+      '<button data-act="density:auto">' + t('settings.density.auto') + '</button></span>',
+      t('settings.density.sub', { c: V.COLS, r: V.ROWS }));
     h += row(t('settings.hud'), toggle('hud', !!vals.hud));
 
     h += '<h3>' + t('settings.controls') + '</h3>';
@@ -178,8 +185,16 @@
       case 'gyroInvertPitch': St.set('gyroInvertPitch', rest === '1'); return true;
       case 'gyroInvertRoll': St.set('gyroInvertRoll', rest === '1'); return true;
       case 'density':
-        var d = parseInt(rest, 10) || 0;
-        St.set('density', d === 0 ? 0 : V.targetCols + d);
+        /* 以「实际列数」为准增减，并把收敛后的期望值存下来 */
+        if (rest === 'auto') {
+          St.set('density', 0);
+        } else {
+          var d = parseInt(rest, 10) || 0;
+          AFP.render.grid.setColumns(V.COLS + d);
+          vals.density = Math.round(V.targetCols * 100) / 100;
+          St.save();
+          Sc.rebuild();
+        }
         return true;
       case 'gyroSens': case 'stickSens':
         var cur = vals[head], step = 0.1;
