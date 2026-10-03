@@ -215,6 +215,85 @@ group('键盘输入', () => {
 });
 
 /* =====================================================================
+   7. 设置界面与持久化
+   ===================================================================== */
+group('设置', () => {
+  const St = AFP.ui.settings;
+  ok(!!St, '应有设置模块');
+  AFP.game.fsm.go('menu');
+  AFP.ui.screens.action('settings');
+  eq(AFP.game.fsm.cur, 'settings', '菜单可进入设置界面');
+  const html = app.doc.getElementById('ui').innerHTML;
+  ok(/data-scr="settings"/.test(html), '设置面板应已渲染');
+  ok(/data-act="controlMode:gyro"/.test(html), '应能切换陀螺仪');
+  ok(/data-act="lang:en"/.test(html), '应能切换语言');
+  ok(/data-act="hud:0"/.test(html), '应能关闭 HUD');
+  ok(/data-act="reset:progress"/.test(html), '应能清除进度');
+
+  /* 语言切换 → 立即生效并落盘 */
+  AFP.ui.screens.dispatch('lang:en');
+  eq(AFP.i18n.lang, 'en', '设置里切换语言应生效');
+  const ui = app.doc.getElementById('ui');
+  ok(/City Run/.test(ui.textContent), '界面文案应换成英文（实际: ' + ui.textContent.slice(0, 60) + '）');
+  eq(JSON.parse(app.store['asciifpv.settings']).lang, 'en', '语言应持久化');
+  AFP.ui.screens.dispatch('lang:zh');
+  eq(AFP.i18n.lang, 'zh', '切回中文');
+  ok(/楼宇穿越/.test(ui.textContent), '界面文案应换回中文');
+
+  /* HUD / 碰撞开关 */
+  AFP.ui.screens.dispatch('hud:0');
+  eq(AFP.S.hudOn, false, '关闭 HUD 应生效');
+  AFP.ui.screens.dispatch('hud:1');
+  eq(AFP.S.hudOn, true, '打开 HUD 应生效');
+  AFP.ui.screens.dispatch('collide:0');
+  eq(AFP.S.collideOn, false, '关闭碰撞应生效');
+  AFP.ui.screens.dispatch('collide:1');
+  eq(AFP.S.collideOn, true, '打开碰撞应生效');
+
+  /* 操控方式 / 触屏布局 / 灵敏度 */
+  AFP.ui.screens.dispatch('controlMode:both');
+  eq(St.get('controlMode'), 'both', '操控方式可切到摇杆+陀螺仪');
+  AFP.ui.screens.dispatch('controlMode:stick');
+  AFP.ui.screens.dispatch('touchLayout:single');
+  eq(St.get('touchLayout'), 'single', '触屏布局可切到单摇杆');
+  AFP.ui.screens.dispatch('touchLayout:split');
+  const s0 = St.get('stickSens');
+  AFP.ui.screens.dispatch('stickSens:+');
+  ok(St.get('stickSens') > s0, '灵敏度 + 应提高');
+  AFP.ui.screens.dispatch('stickSens:-');
+  eq(St.get('stickSens'), s0, '灵敏度 - 应还原');
+
+  /* 字符密度 */
+  AFP.ui.screens.dispatch('density:16');
+  eq(AFP.render.view.targetCols, 168, '密度 +16 应生效');
+  AFP.ui.screens.dispatch('density:-16');
+  eq(AFP.render.view.targetCols, 152, '密度 -16 应还原');
+
+  /* 返回 */
+  AFP.ui.screens.action('back');
+  eq(AFP.game.fsm.cur, 'menu', '设置返回主菜单');
+});
+
+group('设置持久化', () => {
+  /* 模拟上一次会话保存过的设置，重新启动应完整恢复 */
+  const app2 = H.boot({
+    storage: {
+      'asciifpv.settings': JSON.stringify({
+        lang: 'en', controlMode: 'gyro', hud: false, collide: false, density: 200, touchLayout: 'single'
+      })
+    }
+  });
+  const A3 = app2.AFP;
+  eq(A3.i18n.lang, 'en', '重启后应恢复语言');
+  eq(A3.ui.settings.get('controlMode'), 'gyro', '重启后应恢复操控方式');
+  eq(A3.S.hudOn, false, '重启后应恢复 HUD 开关');
+  eq(A3.S.collideOn, false, '重启后应恢复碰撞开关');
+  eq(A3.render.view.targetCols, 200, '重启后应恢复字符密度');
+  eq(A3.ui.settings.get('touchLayout'), 'single', '重启后应恢复触屏布局');
+  ok(/City Run/.test(app2.doc.getElementById('ui').textContent), '重启后界面应为英文');
+});
+
+/* =====================================================================
    8. 主循环
    ===================================================================== */
 group('主循环', () => {

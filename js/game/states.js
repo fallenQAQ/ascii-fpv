@@ -11,6 +11,7 @@
 
   var cineT = 0;
   var helpReturn = 'menu';
+  var settingsReturn = 'menu';
 
   /* 主菜单的运镜：绕着城中心缓慢环绕，作为动态背景 */
   function cine(dt) {
@@ -57,6 +58,15 @@
   fsm.def('help', {
     enter: function (p) { helpReturn = (p && p.from) || 'menu'; Sc.show('help'); },
     back: function () { fsm.go(helpReturn); }
+  });
+
+  fsm.def('settings', {
+    enter: function (p) {
+      settingsReturn = (p && p.from) || 'menu';
+      if (Sc.hasScreen('settings')) Sc.show('settings');
+      else fsm.go(settingsReturn);
+    },
+    back: function () { fsm.go(settingsReturn); }
   });
 
   fsm.def('play', {
@@ -124,8 +134,13 @@
         helpReturn = fsm.cur;
         fsm.go('help', { from: fsm.cur });
         break;
+      case 'settings':
+        settingsReturn = fsm.cur;
+        fsm.go('settings', { from: fsm.cur });
+        break;
       case 'lang':
         AFP.i18n.setLang(AFP.i18n.lang === 'zh' ? 'en' : 'zh');
+        if (AFP.ui.settings) AFP.ui.settings.set('lang', AFP.i18n.lang);
         break;
       case 'resume': fsm.go('play'); break;
       case 'restart': restartRun(); break;
@@ -138,7 +153,7 @@
   };
 
   AFP.i18n.onChange(function () {
-    Sc.refresh();
+    Sc.rebuild();
     AFP.input.refreshHint();
   });
 

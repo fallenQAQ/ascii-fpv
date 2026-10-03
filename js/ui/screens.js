@@ -13,6 +13,8 @@
   Sc.root = null;
   Sc.cur = null;
   Sc.action = null;      // 由 game/states.js 注入
+  Sc.handlers = [];      // 各 UI 模块注册的动作处理器（设置 / 选关…）
+  Sc.onAction = function (fn) { Sc.handlers.push(fn); };
 
   var TEMPLATES = {
     menu: function () {
@@ -22,6 +24,8 @@
         '<div class="dim" data-dyn="menuProgress"></div>' +
         '<button class="btn primary" data-act="free">' +
           '<span data-i18n="menu.free"></span><span class="hint" data-i18n="menu.free.sub"></span></button>' +
+        '<button class="btn" data-act="settings">' +
+          '<span data-i18n="menu.settings"></span></button>' +
         '<button class="btn" data-act="help">' +
           '<span data-i18n="menu.help"></span><span class="hint" data-i18n="menu.best"></span></button>' +
         '<button class="btn ghost" data-act="lang">' +
@@ -44,6 +48,7 @@
         '<button class="btn primary" data-act="resume">' +
           '<span data-i18n="pause.resume"></span><span class="hint">Space / P</span></button>' +
         '<button class="btn" data-act="restart"><span data-i18n="pause.restart"></span><span class="hint">R</span></button>' +
+        '<button class="btn" data-act="settings"><span data-i18n="pause.settings"></span></button>' +
         '<button class="btn" data-act="help"><span data-i18n="pause.help"></span></button>' +
         '<button class="btn ghost" data-act="quit"><span data-i18n="pause.quit"></span><span class="hint">Esc</span></button>' +
         '</div></div>';
@@ -64,27 +69,41 @@
 
   Sc.build = function (host) {
     Sc.root = host;
+    Sc.rebuild();
+  };
+
+  /* 用最新语言 / 状态重绘全部面板（事件委托挂在 host 上，不受影响） */
+  Sc.rebuild = function () {
+    var host = Sc.root;
+    if (!host) return;
     var html = '';
     for (var k in TEMPLATES) html += TEMPLATES[k]();
     host.innerHTML = html;
-    host.addEventListener('click', function (e) {
-      var el = e.target;
-      while (el && el !== host && !(el.getAttribute && el.getAttribute('data-act'))) el = el.parentNode;
-      if (!el || el === host) return;
-      var act = el.getAttribute('data-act');
-      if (act && Sc.action) { e.preventDefault(); Sc.action(act, el); }
-    });
-    Sc.refresh();
+    if (!Sc._wired) {
+      Sc._wired = true;
+      host.addEventListener('click', function (e) {
+        var el = e.target;
+        while (el && el !== host && !(el.getAttribute && el.getAttribute('data-act'))) el = el.parentNode;
+        if (!el || el === host) return;
+        var act = el.getAttribute('data-act');
+        if (act) { e.preventDefault(); Sc.dispatch(act, el); }
+      });
+    }
+    if (Sc.cur) Sc.show(Sc.cur); else Sc.update();
+    AFP.i18n.apply(host);       // 重建后必须重刷 data-i18n 文案
   };
 
   Sc.show = function (name) {
     if (!Sc.root) { Sc.cur = name; return; }
     var list = Sc.root.querySelectorAll('.screen');
+    var found = false;
     for (var i = 0; i < list.length; i++) {
       var on = list[i].getAttribute('data-scr') === name;
+      if (on) found = true;
       list[i].className = list[i].className.replace(/\s*\bon\b/, '') + (on ? ' on' : '');
       if (!on) list[i].style.display = '';
     }
+    if (!found && name && !Sc.hasScreen(name)) { Sc.cur = null; return; }
     Sc.cur = name;
     Sc.update();
   };
@@ -170,6 +189,15 @@
     var goal = '<h3 data-i18n="help.goal"></h3><div class="dim">' + t('help.goal.body') + '</div>';
     return goal + (touch ? tc + gy : kb) + (touch ? '' : gy);
   }
+
+  /* ------------------------- 动作分发 ------------------------- */
+  Sc.dispatch = function (act, el) {
+    for (var i = 0; i < Sc.handlers.length; i++) {
+      if (Sc.handlers[i](act, el)) return true;
+    }
+    if (Sc.action) { Sc.action(act, el); return true; }
+    return false;
+  };
 
   AFP.ui.fmt = { statRow: statRow };
   Sc.statsHtml = statsHtml;

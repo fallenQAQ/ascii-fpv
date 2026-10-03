@@ -66,7 +66,7 @@ function boot(opts) {
   const rafQ = [];
   let nowMs = 0;
   let rafId = 1;
-  const store = {};
+  const store = Object.assign({}, opts.storage || {});
 
   const win = {
     document: doc,

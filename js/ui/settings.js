@@ -1,0 +1,198 @@
+/* =====================================================================
+   ASCII FPV · 设置项与设置界面
+   ---------------------------------------------------------------------
+   所有可调项统一存在 AFP.ui.settings.vals 里，并通过 AFP.store 落到
+   localStorage；语言 / 密度 / HUD / 碰撞等改动会立即生效。
+   ===================================================================== */
+(function (g) {
+  'use strict';
+  var AFP = g.AFP, S = AFP.S, U = AFP.util, V = AFP.render.view;
+  var Sc = AFP.ui.screens;
+  function t(k, v) { return AFP.t(k, v); }
+
+  var DEFAULTS = {
+    lang: 'zh',
+    controlMode: 'stick',      // stick | gyro | both
+    stickSens: 1,              // 0.4 ~ 2.0
+    gyroSens: 1,               // 0.3 ~ 2.5
+    gyroInvertPitch: false,
+    gyroInvertRoll: false,
+    touchLayout: 'split',      // split | single
+    density: 0,                // 0 = 按设备自动
+    hud: true,
+    collide: true
+  };
+
+  var St = AFP.ui.settings = AFP.ui.settings || {};
+  var vals = {};
+  for (var k0 in DEFAULTS) vals[k0] = DEFAULTS[k0];
+
+  St.DEFAULTS = DEFAULTS;
+  St.get = function (k) { return vals[k]; };
+  St.values = function () { return vals; };
+
+  St.load = function () {
+    var saved = AFP.store.get('settings', null);
+    if (saved && typeof saved === 'object') {
+      for (var k in DEFAULTS) if (saved[k] !== undefined) vals[k] = saved[k];
+    }
+    St.applyAll();
+    return vals;
+  };
+  St.save = function () { AFP.store.set('settings', vals); };
+  St.set = function (k, v, silent) {
+    if (vals[k] === v) return false;
+    vals[k] = v;
+    St.apply(k);
+    if (!silent) St.save();
+    if (Sc.cur === 'settings') Sc.rebuild();
+    return true;
+  };
+
+  St.applyAll = function () {
+    for (var k in vals) St.apply(k);
+  };
+  St.apply = function (k) {
+    switch (k) {
+      case 'lang': AFP.i18n.setLang(vals.lang); break;
+      case 'density':
+        if (vals.density) V.targetCols = U.clamp(vals.density, 64, 264);
+        if (AFP.render.grid.setupGrid) AFP.render.grid.setupGrid();
+        break;
+      case 'hud': S.hudOn = !!vals.hud; break;
+      case 'collide':
+        S.collideOn = !!vals.collide;
+        if (!S.collideOn) S.crashed = 0;
+        break;
+      case 'controlMode':
+      case 'gyroSens':
+      case 'gyroInvertPitch':
+      case 'gyroInvertRoll':
+        if (AFP.input.gyro && AFP.input.gyro.syncMode) AFP.input.gyro.syncMode();
+        break;
+      case 'stickSens': break;
+      case 'touchLayout': AFP.input.refreshHint(); break;
+    }
+  };
+
+  /* ------------------------- 界面 ------------------------- */
+  function row(label, ctrl, sub) {
+    return '<div class="row"><span class="label">' + label +
+      (sub ? '<span class="sub">' + sub + '</span>' : '') + '</span><span>' + ctrl + '</span></div>';
+  }
+  function seg(act, opts, cur) {
+    var h = '<span class="seg">';
+    for (var i = 0; i < opts.length; i++) {
+      h += '<button data-act="' + act + ':' + opts[i].v + '"' + (cur === opts[i].v ? ' class="on"' : '') + '>' +
+        opts[i].label + '</button>';
+    }
+    return h + '</span>';
+  }
+  function toggle(act, on) {
+    return '<span class="seg">' +
+      '<button data-act="' + act + ':1"' + (on ? ' class="on"' : '') + '>' + t('settings.on') + '</button>' +
+      '<button data-act="' + act + ':0"' + (!on ? ' class="on"' : '') + '>' + t('settings.off') + '</button>' +
+      '</span>';
+  }
+  function sens(act, v, min, max, step) {
+    var pct = Math.round(v * 100) + '%';
+    return '<span class="seg">' +
+      '<button data-act="' + act + ':-"' + (v <= min + 1e-6 ? ' disabled' : '') + '>-</button>' +
+      '<button data-act="' + act + ':0" disabled style="min-width:56px">' + pct + '</button>' +
+      '<button data-act="' + act + ':+"' + (v >= max - 1e-6 ? ' disabled' : '') + '>+</button>' +
+      '</span>';
+  }
+
+  function screenHtml() {
+    var gyroOk = !AFP.input.gyro || AFP.input.gyro.supported !== false;
+    var touch = AFP.input.isTouch;
+    var h = '<h1>' + t('settings.title') + '</h1><h2>' + t('settings.sub') + '</h2>';
+
+    h += '<h3>' + t('settings.display') + '</h3>';
+    h += row(t('settings.language'), seg('lang', [
+      { v: 'zh', label: '中文' }, { v: 'en', label: 'English' }
+    ], vals.lang));
+    h += row(t('settings.density'),
+      '<span class="seg">' +
+      '<button data-act="density:-16">-</button>' +
+      '<button data-act="density:0" disabled style="min-width:56px">' + V.targetCols + '</button>' +
+      '<button data-act="density:16">+</button></span>',
+      t('settings.density.sub', { c: V.targetCols }));
+    h += row(t('settings.hud'), toggle('hud', !!vals.hud));
+
+    h += '<h3>' + t('settings.controls') + '</h3>';
+    h += row(t('settings.controlMode'), seg('controlMode', [
+      { v: 'stick', label: t('settings.control.stick') },
+      { v: 'gyro', label: t('settings.control.gyro') },
+      { v: 'both', label: t('settings.control.both') }
+    ], vals.controlMode), t('settings.control.sub'));
+    if (vals.controlMode !== 'stick') {
+      if (gyroOk) {
+        h += row(t('settings.gyroSens'), sens('gyroSens', vals.gyroSens, 0.3, 2.5));
+        h += row(t('settings.gyroInvertPitch'), toggle('gyroInvertPitch', !!vals.gyroInvertPitch));
+        h += row(t('settings.gyroInvertRoll'), toggle('gyroInvertRoll', !!vals.gyroInvertRoll));
+        h += row(t('settings.gyroCalib'),
+          '<button class="btn" style="margin:0" data-act="gyroCalib">' + t('settings.gyroCalib') + '</button>',
+          AFP.input.gyro && AFP.input.gyro.calibrated ? t('settings.gyroCalibrated') : t('settings.gyroHint'));
+      } else {
+        h += row(t('settings.gyro'), '<span class="dim">' + t('settings.gyroUnsupported') + '</span>');
+      }
+    }
+    if (touch) {
+      h += row(t('settings.touchLayout'), seg('touchLayout', [
+        { v: 'split', label: t('settings.touch.split') },
+        { v: 'single', label: t('settings.touch.single') }
+      ], vals.touchLayout), t('settings.touch.sub'));
+    }
+    h += row(t('settings.stickSens'), sens('stickSens', vals.stickSens, 0.4, 2));
+
+    h += '<h3>' + t('settings.game') + '</h3>';
+    h += row(t('settings.collide'), toggle('collide', !!vals.collide), t('settings.collide.sub'));
+    h += row(t('settings.resetBest'), '<button class="btn" style="margin:0" data-act="reset:best">' + t('settings.resetBest') + '</button>');
+    h += row(t('settings.resetProgress'), '<button class="btn" style="margin:0" data-act="reset:progress">' + t('settings.resetProgress') + '</button>');
+
+    h += '<div class="bar"><button class="btn" data-act="back">' + t('common.back') + '</button></div>';
+    return '<div class="screen" data-scr="settings"><div class="panel">' + h + '</div></div>';
+  }
+  Sc.addScreen('settings', screenHtml);
+
+  /* ------------------------- 交互 ------------------------- */
+  Sc.onAction(function (act) {
+    var i = act.indexOf(':');
+    var head = i < 0 ? act : act.slice(0, i);
+    var rest = i < 0 ? '' : act.slice(i + 1);
+    switch (head) {
+      case 'lang': St.set('lang', rest); return true;
+      case 'controlMode': St.set('controlMode', rest); return true;
+      case 'touchLayout': St.set('touchLayout', rest); return true;
+      case 'hud': St.set('hud', rest === '1'); return true;
+      case 'collide': St.set('collide', rest === '1'); return true;
+      case 'gyroInvertPitch': St.set('gyroInvertPitch', rest === '1'); return true;
+      case 'gyroInvertRoll': St.set('gyroInvertRoll', rest === '1'); return true;
+      case 'density':
+        var d = parseInt(rest, 10) || 0;
+        if (d === 0) St.set('density', 0);
+        else if (vals.density === 0) St.set('density', V.targetCols + d);
+        else St.set('density', V.targetCols + d);
+        return true;
+      case 'gyroSens': case 'stickSens':
+        var cur = vals[head], step = 0.1;
+        var next = rest === '-' ? cur - step : (rest === '+' ? cur + step : cur);
+        var lim = head === 'gyroSens' ? [0.3, 2.5] : [0.4, 2];
+        St.set(head, Math.round(U.clamp(next, lim[0], lim[1]) * 10) / 10);
+        return true;
+      case 'gyroCalib':
+        if (AFP.input.gyro && AFP.input.gyro.calibrate) AFP.input.gyro.calibrate();
+        Sc.rebuild();
+        return true;
+      case 'reset':
+        if (rest === 'best') { S.best = 0; S.bestSaved = 0; AFP.store.del('best'); }
+        if (rest === 'progress' && AFP.game.levels) AFP.game.levels.resetProgress();
+        Sc.rebuild();
+        return true;
+    }
+    return false;
+  });
+
+  St.screenHtml = screenHtml;
+})(typeof window !== 'undefined' ? window : globalThis);
