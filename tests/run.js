@@ -706,6 +706,70 @@ group('主循环', () => {
 });
 
 /* =====================================================================
+   9. 全流程验收（像玩家一样从头走一遍）
+   ===================================================================== */
+group('全流程验收', () => {
+  const A = H.boot();
+  const AF = A.AFP;
+  eq(AF.game.fsm.cur, 'menu', '1. 启动进入开始界面');
+
+  AF.ui.screens.dispatch('lang');
+  eq(AF.i18n.lang, 'en', '2. 开始界面可切英文');
+  AF.ui.screens.dispatch('lang');
+  eq(AF.i18n.lang, 'zh', '3. 可切回中文');
+
+  AF.ui.screens.dispatch('campaign');
+  eq(AF.game.fsm.cur, 'play', '4. 主菜单可进入闯关');
+  eq(AF.S.mode, 'level', '5. 模式为闯关');
+  ok(AF.S.countdown > 0, '6. 起飞前有倒计时');
+  A.hook.render();
+  ok(A.hook.dump().replace(/\s/g, '').length > 100, '7. 闯关画面有内容');
+
+  AF.S.countdown = 0;
+  const c = AF.game.levels.current();
+  c.gates.forEach(g => { A.hook.setCam({ x: g.x, y: g.y, z: g.z }); AF.game.fsm.update(1 / 120); });
+  eq(AF.game.fsm.cur, 'result', '8. 穿过全部光环进入结算');
+  ok(AF.game.levels.bestTime(0) !== null, '9. 记录本关最佳用时');
+
+  AF.ui.screens.dispatch('next');
+  eq(AF.S.level, 1, '10. 结算可进入下一关');
+  AF.game.onInputAction('pause');
+  eq(AF.game.fsm.cur, 'pause', '11. 空格暂停');
+  AF.ui.screens.dispatch('settings');
+  eq(AF.game.fsm.cur, 'settings', '12. 暂停里可进设置');
+  AF.ui.settings.set('hud', false);
+  eq(AF.S.hudOn, false, '13. 设置立即生效');
+  AF.ui.settings.set('hud', true);
+  AF.ui.screens.dispatch('back');
+  eq(AF.game.fsm.cur, 'pause', '14. 设置返回暂停');
+  AF.ui.screens.dispatch('resume');
+  eq(AF.game.fsm.cur, 'play', '15. 继续飞行');
+
+  /* 撞楼 → 坠机 → 重来 */
+  const blk = AF.world.blocks.find(b => b.buildings.length);
+  const b = blk.buildings[0];
+  AF.S.countdown = 0;
+  A.hook.setCam({ x: blk.bx * 64 + b.x + b.w / 2, y: 10, z: blk.bz * 64 + b.z + b.d / 2 });
+  AF.game.fsm.update(1 / 120);
+  eq(AF.game.fsm.cur, 'crash', '16. 撞楼进入坠机界面');
+  A.hook.render();
+  ok(/CRASHED|坠/.test(A.hook.dump()), '17. 画面上有坠机提示');
+  AF.ui.screens.dispatch('retry');
+  eq(AF.game.fsm.cur, 'play', '18. 重来一次');
+
+  AF.ui.screens.dispatch('quit');
+  eq(AF.game.fsm.cur, 'menu', '19. 回到开始界面');
+  AF.ui.screens.dispatch('free');
+  eq(AF.S.mode, 'free', '20. 自由飞行');
+  eq(AF.S.gates.length, 0, '21. 自由飞行没有目标点');
+  A.hook.axes({ thr: 1 });
+  for (let i = 0; i < 600; i++) AF.game.fsm.update(1 / 120);
+  A.hook.axes({ thr: 0 });
+  ok(AF.S.flown > 50, '22. 自由飞行累计距离，实际 ' + AF.S.flown.toFixed(1) + ' m');
+  ok(AF.S.best >= AF.S.flown, '23. 最远距离记录应被刷新');
+});
+
+/* =====================================================================
    汇总
    ===================================================================== */
 console.log('');
