@@ -136,6 +136,56 @@ group('生物群系', () => {
 });
 
 /* =====================================================================
+   3.8 空中障碍物
+   ===================================================================== */
+group('空中障碍物', () => {
+  const O = AFP.world.obstacles;
+  ok(!!O, '应有障碍物模块');
+  const st = O.stats();
+  ok(st.total > 100, '障碍物数量应成规模，实际 ' + st.total);
+  ok(st.by.balloon > 10, '应有气球，实际 ' + st.by.balloon);
+  ok(st.by.plane > 10, '应有飞行器，实际 ' + st.by.plane);
+  ok(st.by.drone > 10, '应有无人机，实际 ' + st.by.drone);
+  ok(st.minY > 8, '障碍物不应埋在地面里，最低 ' + st.minY.toFixed(1) + ' m');
+  eq(st.by.belowRoof || 0, 0, '障碍物不应生成在楼顶之下（会穿楼）');
+
+  /* 位置随时间变化（真正的移动障碍物） */
+  const blk = AFP.world.blocks.find(b => b.obs && b.obs.length);
+  const o = blk.obs[0];
+  const ox = blk.bx * AFP.cfg.BLOCK, oz = blk.bz * AFP.cfg.BLOCK;
+  const p0 = [0, 0, 0], p1 = [0, 0, 0];
+  AFP.S.time = 0; O.pos(o, ox, oz, p0);
+  AFP.S.time = 5; O.pos(o, ox, oz, p1);
+  const moved = Math.abs(p1[0] - p0[0]) + Math.abs(p1[1] - p0[1]) + Math.abs(p1[2] - p0[2]);
+  ok(moved > 0.5, '障碍物应随时间移动，位移 ' + moved.toFixed(2) + ' m');
+
+  /* 撞上气球 → 坠机（原因 3） */
+  const balloonBlk = AFP.world.blocks.find(b => b.obs.some(x => x.type === 'balloon'));
+  const bo = balloonBlk.obs.find(x => x.type === 'balloon');
+  const box = balloonBlk.bx * AFP.cfg.BLOCK, boz = balloonBlk.bz * AFP.cfg.BLOCK;
+  const bp = [0, 0, 0];
+  O.pos(bo, box, boz, bp);
+  AFP.game.player.respawn({ x: bp[0], y: bp[1], z: bp[2], spd: 26 });
+  eq(AFP.game.player.collide(), 3, '撞上气球应判定坠机（原因 3）');
+
+  /* 渲染：把相机正对气球，画面里应出现气球材质的颜色 */
+  AFP.S.time = 0;
+  O.pos(bo, box, boz, bp);
+  AFP.game.fsm.go('play');
+  AFP.game.player.respawn({ x: bp[0], y: bp[1], z: bp[2] - 40, spd: 26 });
+  app.hook.setCam({ yaw: 0, pitch: 0, roll: 0 });
+  app.hook.render();
+  const BUF = AFP.render.buf, V = AFP.render.view;
+  const pals = AFP.render.pal.M_BALLOON.map(m => m.pal);
+  let hit = 0;
+  for (let i = 0; i < BUF.colr.length; i++) {
+    const c = BUF.colr[i];
+    for (const p of pals) if (c >= p && c < p + AFP.cfg.LEVELS) { hit++; break; }
+  }
+  ok(hit > 4, '正对气球渲染时画面应含气球颜色，实际 ' + hit + ' 格');
+});
+
+/* =====================================================================
    4. 画面渲染
    ===================================================================== */
 group('渲染', () => {
@@ -154,6 +204,7 @@ group('渲染', () => {
    ===================================================================== */
 group('状态机', () => {
   const fsm = AFP.game.fsm;
+  fsm.go('menu');
   ok(fsm.is('menu'), '当前在主菜单');
   AFP.ui.screens.action('free');
   eq(fsm.cur, 'play', '点击「自由飞行」应进入 play');

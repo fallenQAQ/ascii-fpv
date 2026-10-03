@@ -74,10 +74,10 @@
     }
   }
 
-  /* 碰撞检测：地面 / 楼房 / 空中障碍物（后者由 world/obstacles 提供） */
+  /* 碰撞检测：地面 / 楼房 / 空中移动障碍物 */
   function collide() {
     if (S.camY < 1.2) return 1;
-    var B = cfg.BLOCK, T = W.TILES;
+    var B = cfg.BLOCK;
     var bxA = Math.floor(S.camX / B), bzA = Math.floor(S.camZ / B);
     for (var j = -1; j <= 1; j++) {
       for (var i = -1; i <= 1; i++) {
@@ -88,7 +88,14 @@
           if (S.camX > ox + b.x - 1.1 && S.camX < ox + b.x + b.w + 1.1 &&
               S.camZ > oz + b.z - 1.1 && S.camZ < oz + b.z + b.d + 1.1 && S.camY < b.h + 0.7) return 2;
         }
-        if (AFP.world.obstacles && AFP.world.obstacles.hitBlock(blk, ox, oz)) return 3;
+      }
+    }
+    /* 障碍物会飞出所属街区，因此检测范围放宽到 ±2 个街区 */
+    if (W.obstacles) {
+      for (var j2 = -2; j2 <= 2; j2++) {
+        for (var i2 = -2; i2 <= 2; i2++) {
+          if (W.obstacles.hitBlock(W.blockAt(bxA + i2, bzA + j2), (bxA + i2) * B, (bzA + j2) * B)) return 3;
+        }
       }
     }
     return 0;
