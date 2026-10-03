@@ -230,8 +230,15 @@
     hudRow(V.ROWS - 1, 32, C.C_HUD2);
     var line = t('hud.spd') + ' ' + U.pad(S.spd.toFixed(1), 4) + ' M/S   ' + t('hud.alt') + ' ' + U.pad(Math.round(S.camY), 3) +
       ' M   ' + t('hud.hdg') + ' ' + U.pad0(hdg, 3) + '   BNK ' + U.sgnNum(S.roll) + '   PIT ' + U.sgnNum(S.pitch) +
-      '   VS ' + U.sgnNum(S.spd * Math.sin(S.pitch * cfg.DEG)) + ' M/S   ' + t('hud.dist') + ' ' + (S.flown / 1000).toFixed(2) +
-      ' KM   ' + t('hud.best') + ' ' + (S.best / 1000).toFixed(2) + ' KM';
+      '   VS ' + U.sgnNum(S.spd * Math.sin(S.pitch * cfg.DEG)) + ' M/S   ';
+    if (S.mode === 'level' && S.gates.length) {
+      line += t('hud.level', { n: S.level + 1 }) + '   ' + t('hud.gates', { i: Math.min(S.gateIndex + 1, S.gates.length), n: S.gates.length }) +
+        '   ' + t('hud.raceTime') + ' ' + U.fmtTime(S.raceTime);
+      var ldef = AFP.game.levels && AFP.game.levels.current() && AFP.game.levels.current().def;
+      if (ldef && ldef.time) line += ' / ' + U.fmtTime(ldef.time);
+    } else {
+      line += t('hud.dist') + ' ' + (S.flown / 1000).toFixed(2) + ' KM   ' + t('hud.best') + ' ' + (S.best / 1000).toFixed(2) + ' KM';
+    }
     hudStrOp(1, V.ROWS - 2, fitCells(line, V.COLS - 2), C.C_HUD);
     var hint = AFP.input.hintKey ? t(AFP.input.hintKey) : t('hud.hint.key');
     hudStrOp(1, V.ROWS - 1, fitCells(hint, V.COLS - 2), C.C_HUD2);
@@ -241,6 +248,12 @@
     if (Math.abs(S.roll) > 44.5) hudCenter(cy - 3, t('hud.banklim'), C.C_AMB);
     if (Math.abs(S.pitch) > 44.5) hudCenter(cy + 3, t('hud.pitchlim'), C.C_AMB);
     if (S.camY < 25 && !S.crashed) hudCenter(cy + 5, t('hud.lowalt'), C.C_WARN);
+    /* 起飞倒计时 */
+    if (S.countdown > 0) {
+      var n = Math.ceil(S.countdown);
+      hudCenter(cy - 4, n > 1 ? String(n - 1) : 'GO', C.C_AMB);
+      hudCenter(cy + 1, t('hud.gates', { i: 1, n: S.gates.length }), C.C_HUD2);
+    }
   }
 
   function drawControlTag() {

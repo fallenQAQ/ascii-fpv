@@ -30,6 +30,7 @@
   function startFree() {
     S.mode = 'free';
     S.gates = []; S.gateIndex = 0; S.raceTime = 0; S.raceDone = false;
+    S.countdown = 0;
     S.stats.gates = 0; S.stats.time = 0;
     PL.respawn(cfg.START);
     fsm.go('play');
@@ -39,7 +40,6 @@
     if (S.mode === 'level' && AFP.game.levels) AFP.game.levels.start(S.level);
     else startFree();
   }
-
   /* ------------------------- 状态定义 ------------------------- */
   fsm.def('boot', {
     update: function () { fsm.go('menu'); }
@@ -69,13 +69,29 @@
     back: function () { fsm.go(settingsReturn); }
   });
 
+  fsm.def('levels', {
+    enter: function () { Sc.show('levels'); },
+    back: function () { fsm.go('menu'); }
+  });
+
+  fsm.def('result', {
+    enter: function () { Sc.show('result'); },
+    back: function () { fsm.go('levels'); }
+  });
+
   fsm.def('play', {
     enter: function () { Sc.hideAll(); },
     update: function (dt) {
+      if (S.countdown > 0) {                 // 起飞倒计时：世界静止，先看清目标
+        S.countdown -= dt;
+        if (S.countdown < 0) S.countdown = 0;
+        return;
+      }
       PL.physics(dt);
       if (S.mode === 'level' && AFP.game.levels) {
         S.raceTime += dt;
         AFP.game.levels.update(dt);
+        AFP.game.levels.tick(dt);
       }
       if (S.crashed) fsm.go('crash');
       else if (S.raceDone && AFP.game.levels) fsm.go('result');

@@ -78,6 +78,7 @@
     'crash.ground': '撞上地面',
     'crash.building': '撞上楼房',
     'crash.obstacle': '撞上空中障碍物',
+    'crash.timeout': '超时',
     'crash.dist': '本次航程',
     'crash.best': '历史最远',
     'crash.gates': '已穿光环',

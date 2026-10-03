@@ -186,6 +186,105 @@ group('空中障碍物', () => {
 });
 
 /* =====================================================================
+   3.9 闯关模式 / 自由飞行
+   ===================================================================== */
+group('闯关模式', () => {
+  const L = AFP.game.levels;
+  ok(!!L, '应有关卡模块');
+  ok(L.count() >= 6, '应有多个关卡，实际 ' + L.count());
+  L.resetProgress();
+  const c = L.start(0);
+  eq(AFP.S.mode, 'level', '应进入闯关模式');
+  eq(AFP.game.fsm.cur, 'play', '应进入飞行状态');
+  eq(AFP.S.gates.length, L.defs[0].gates, '光环数量应与关卡定义一致');
+  ok(AFP.S.countdown > 0, '起飞前应有倒计时');
+  c.gates.forEach((g, i) => {
+    eq(((g.x - 8) % 64 + 64) % 64, 0, '光环 ' + i + ' 应落在南北向道路中心线上');
+    eq(((g.z - 8) % 64 + 64) % 64, 0, '光环 ' + i + ' 应落在东西向道路中心线上');
+    ok(g.y >= L.defs[0].alt[0] - 1 && g.y <= L.defs[0].alt[1] + 1, '光环高度应在设定区间内');
+    ok(g.r >= 8, '光环应有可穿过的半径');
+  });
+  /* 同一关卡两次生成必须完全一致（确定性） */
+  const c2 = L.build(0);
+  eq(c2.gates[0].x, c.gates[0].x, '关卡生成应可复现');
+  eq(c2.gates.map(g => g.y).join(','), c.gates.map(g => g.y).join(','), '光环高度序列应可复现');
+
+  /* 倒计时期间世界静止 */
+  const z0 = AFP.S.camZ;
+  for (let i = 0; i < 30; i++) AFP.game.fsm.update(1 / 120);
+  near(AFP.S.camZ, z0, 1e-6, '倒计时期间不应推进物理');
+  AFP.S.countdown = 0;
+
+  /* 依次穿过全部光环 → 通关 */
+  for (let i = 0; i < c.gates.length; i++) {
+    const g = c.gates[i];
+    ok(AFP.S.gateIndex === i, '应按顺序等待第 ' + (i + 1) + ' 个光环');
+    app.hook.setCam({ x: g.x, y: g.y, z: g.z });
+    AFP.game.fsm.update(1 / 120);
+  }
+  eq(AFP.S.gateIndex, c.gates.length, '应记录穿过全部光环');
+  eq(AFP.S.raceDone, true, '应标记通关');
+  eq(AFP.game.fsm.cur, 'result', '通关后应进入结算界面');
+  eq(AFP.game.levels.progress().cleared, 1, '应记录已通关第 1 关');
+  ok(AFP.game.levels.unlocked(1), '第 2 关应解锁');
+  ok(AFP.game.levels.bestTime(0) !== null, '应记录最佳用时');
+  eq(JSON.parse(app.store['asciifpv.progress']).cleared, 1, '进度应持久化');
+
+  /* 乱序飞过后面的光环不应计数 */
+  L.start(1);
+  AFP.S.countdown = 0;
+  const g2 = AFP.S.gates[2];
+  app.hook.setCam({ x: g2.x, y: g2.y + 30, z: g2.z });
+  AFP.game.fsm.update(1 / 120);
+  eq(AFP.S.gateIndex, 0, '未按顺序到达不应推进');
+
+  /* 超时失败 */
+  L.start(1);
+  AFP.S.countdown = 0;
+  AFP.S.raceTime = L.defs[1].time + 1;
+  AFP.game.fsm.update(1 / 120);
+  eq(AFP.S.crashReason, 4, '超时应记为坠机原因 4');
+  eq(AFP.game.fsm.cur, 'crash', '超时后应进入坠机界面');
+
+  /* 失败可重来 */
+  AFP.ui.screens.dispatch('retry');
+  eq(AFP.game.fsm.cur, 'play', '重来应重新进入飞行');
+  eq(AFP.S.mode, 'level', '重来仍在闯关模式');
+  eq(AFP.S.gateIndex, 0, '重来应重置目标点');
+  ok(AFP.S.countdown > 0, '重来应重新倒计时');
+});
+
+group('自由飞行', () => {
+  AFP.ui.screens.dispatch('free');
+  eq(AFP.S.mode, 'free', '应为自由飞行模式');
+  eq(AFP.S.gates.length, 0, '自由飞行没有目标点');
+  eq(AFP.S.countdown, 0, '自由飞行不应有倒计时');
+  const y0 = AFP.S.flown;
+  AFP.S.collideOn = false;
+  AFP.game.fsm.update(1 / 120);
+  ok(AFP.S.flown > y0, '自由飞行应正常推进');
+  AFP.S.collideOn = true;
+  eq(AFP.S.raceTime, 0, '自由飞行不计关卡时间');
+});
+
+group('选关界面', () => {
+  AFP.game.fsm.go('menu');
+  AFP.ui.screens.dispatch('levels');
+  eq(AFP.game.fsm.cur, 'levels', '应进入选关界面');
+  const html = app.doc.getElementById('ui').innerHTML;
+  ok(/data-scr="levels"/.test(html), '应渲染选关面板');
+  ok(/data-act="level:0"/.test(html), '第 1 关可点');
+  ok(/data-act="level:7"/.test(html), '最后一关卡片应存在');
+  const cards = app.doc.getElementById('ui').querySelectorAll('.card');
+  eq(cards.length, AFP.game.levels.count(), '卡片数应等于关卡数');
+  const locked = cards.filter(x => x.getAttribute('disabled') !== null).length;
+  ok(locked > 0, '未解锁关卡应被禁用，实际禁用 ' + locked);
+  ok(AFP.game.levels.unlocked(1) && !AFP.game.levels.unlocked(3), '解锁进度应为 1 关');
+  AFP.ui.screens.dispatch('quit');
+  eq(AFP.game.fsm.cur, 'menu', '返回主菜单');
+});
+
+/* =====================================================================
    4. 画面渲染
    ===================================================================== */
 group('渲染', () => {
@@ -206,7 +305,7 @@ group('状态机', () => {
   const fsm = AFP.game.fsm;
   fsm.go('menu');
   ok(fsm.is('menu'), '当前在主菜单');
-  AFP.ui.screens.action('free');
+  AFP.ui.screens.dispatch('free');
   eq(fsm.cur, 'play', '点击「自由飞行」应进入 play');
   eq(AFP.S.mode, 'free', '模式为自由飞行');
   app.hook.action('pause');
@@ -219,7 +318,7 @@ group('状态机', () => {
   eq(AFP.S.hudOn, true, 'H 键应切回 HUD');
   app.hook.action('back');
   eq(fsm.cur, 'pause', 'Esc 在 play 中应暂停');
-  AFP.ui.screens.action('quit');
+  AFP.ui.screens.dispatch('quit');
   eq(fsm.cur, 'menu', '返回主菜单');
 });
 
@@ -227,7 +326,7 @@ group('状态机', () => {
    6. 飞行力学与碰撞
    ===================================================================== */
 group('飞行力学', () => {
-  AFP.ui.screens.action('free');
+  AFP.ui.screens.dispatch('free');
   const S = AFP.S;
   const z0 = S.camZ, y0 = S.camY;
   app.hook.axes({ pitch: 0, roll: 0, thr: 1 });
@@ -271,7 +370,7 @@ group('限幅与碰撞', () => {
    ===================================================================== */
 group('键盘输入', () => {
   AFP.game.fsm.go('menu');
-  AFP.ui.screens.action('free');
+  AFP.ui.screens.dispatch('free');
   app.hook.key('KeyZ', true);
   app.hook.AFP.input.update();
   eq(AFP.S.axes.thr, 1, 'Z 键 → 油门 +1');
@@ -295,7 +394,7 @@ group('设置', () => {
   const St = AFP.ui.settings;
   ok(!!St, '应有设置模块');
   AFP.game.fsm.go('menu');
-  AFP.ui.screens.action('settings');
+  AFP.ui.screens.dispatch('settings');
   eq(AFP.game.fsm.cur, 'settings', '菜单可进入设置界面');
   const html = app.doc.getElementById('ui').innerHTML;
   ok(/data-scr="settings"/.test(html), '设置面板应已渲染');
@@ -344,7 +443,7 @@ group('设置', () => {
   eq(AFP.render.view.targetCols, 152, '密度 -16 应还原');
 
   /* 返回 */
-  AFP.ui.screens.action('back');
+  AFP.ui.screens.dispatch('back');
   eq(AFP.game.fsm.cur, 'menu', '设置返回主菜单');
 });
 

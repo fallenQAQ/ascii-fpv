@@ -15,6 +15,8 @@
   Sc.action = null;      // 由 game/states.js 注入
   Sc.handlers = [];      // 各 UI 模块注册的动作处理器（设置 / 选关…）
   Sc.onAction = function (fn) { Sc.handlers.push(fn); };
+  Sc.updaters = [];      // 各 UI 模块注册的动态内容刷新器
+  Sc.onUpdate = function (fn) { Sc.updaters.push(fn); };
 
   var TEMPLATES = {
     menu: function () {
@@ -22,8 +24,12 @@
         '<h1 data-i18n="app.title"></h1>' +
         '<h2 data-i18n="app.subtitle"></h2>' +
         '<div class="dim" data-dyn="menuProgress"></div>' +
-        '<button class="btn primary" data-act="free">' +
+        '<button class="btn primary" data-act="campaign">' +
+          '<span data-i18n="menu.campaign"></span><span class="hint" data-dyn="campaignSub"></span></button>' +
+        '<button class="btn" data-act="free">' +
           '<span data-i18n="menu.free"></span><span class="hint" data-i18n="menu.free.sub"></span></button>' +
+        '<button class="btn" data-act="levels">' +
+          '<span data-i18n="levels.title"></span><span class="hint" data-dyn="levelsSub"></span></button>' +
         '<button class="btn" data-act="settings">' +
           '<span data-i18n="menu.settings"></span></button>' +
         '<button class="btn" data-act="help">' +
@@ -135,14 +141,22 @@
     setDyn('langHint', t('lang.other'));
     setDyn('menuGo', '');
     var best = AFP.S.best || 0;
-    var prog = AFP.game.levels ? AFP.game.levels.progressText() : '';
+    var L = AFP.game.levels;
+    var prog = L ? L.progressText() : '';
     setDyn('menuProgress', t('menu.best') + ': ' + (best / 1000).toFixed(2) + ' KM' + (prog ? '   ·   ' + prog : ''));
+    if (L) {
+      setDyn('campaignSub', t('menu.campaign.sub', { n: L.count() }));
+      setDyn('levelsSub', L.progress().cleared + '/' + L.count());
+    }
     var hb = dyn('helpBody');
     if (hb) hb.innerHTML = helpHtml();
     var ps = dyn('pauseStats');
     if (ps) ps.innerHTML = statsHtml(runStats());
     var cs = dyn('crashStats');
     if (cs) cs.innerHTML = statsHtml(runStats(), crashReasonText());
+    for (var i = 0; i < Sc.updaters.length; i++) {
+      try { Sc.updaters[i](); } catch (e) { }
+    }
   };
 
   function statRow(k, v, amber) {
@@ -150,7 +164,10 @@
   }
   function crashReasonText() {
     var r = AFP.S.crashReason;
-    return r === 2 ? t('crash.building') : (r === 3 ? t('crash.obstacle') : t('crash.ground'));
+    return r === 2 ? t('crash.building')
+      : r === 3 ? t('crash.obstacle')
+        : r === 4 ? t('crash.timeout')
+          : t('crash.ground');
   }
   function runStats() {
     var S = AFP.S;

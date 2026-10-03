@@ -78,6 +78,7 @@
     'crash.ground': 'Hit the ground',
     'crash.building': 'Hit a building',
     'crash.obstacle': 'Hit an air obstacle',
+    'crash.timeout': 'Out of time',
     'crash.dist': 'Distance flown',
     'crash.best': 'Best distance',
     'crash.gates': 'Rings passed',

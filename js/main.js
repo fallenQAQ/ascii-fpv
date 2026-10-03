@@ -36,7 +36,7 @@
       state: function () { return AFP.game.fsm.cur; },
       go: function (name, payload) { return AFP.game.fsm.go(name, payload); },
       action: function (name) { AFP.game.onInputAction(name); },
-      ui: function (act) { if (AFP.ui.screens.action) AFP.ui.screens.action(act); },
+      ui: function (act) { AFP.ui.screens.dispatch(act); },
       setCam: function (o) {
         if (o.x !== undefined) S.camX = o.x;
         if (o.y !== undefined) S.camY = o.y;

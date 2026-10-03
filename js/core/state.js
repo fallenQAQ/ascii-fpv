@@ -60,6 +60,7 @@
   S.gateIndex = 0;
   S.raceTime = 0;
   S.raceDone = false;
+  S.countdown = 0;            // 起飞倒计时（秒）
   /* 统一输入（-1..1 模拟量）：pitch 正 = 抬头，roll 正 = 右滚，thr 正 = 加速 */
   S.axes = { pitch: 0, roll: 0, thr: 0 };
   S.keys = Object.create(null);
