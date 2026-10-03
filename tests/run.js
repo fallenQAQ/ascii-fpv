@@ -822,52 +822,55 @@ group('触屏分屏', () => {
   }
   function pt(id, x, y) { return { identifier: id, clientX: x, clientY: y }; }
 
-  /* 右半屏：姿态摇杆（相对起手点） */
-  fire('touchstart', [pt(1, 600, 640)], 0);
-  eq(T.st.stickId, 1, '右半屏触点应成为姿态摇杆');
-  fire('touchmove', [pt(1, 606, 646)], 20);
+  /* 左半屏：姿态摇杆（相对起手点） */
+  fire('touchstart', [pt(1, 120, 640)], 0);
+  eq(T.st.stickId, 1, '左半屏触点应成为姿态摇杆');
+  eq(T.st.thrId, null, '左半屏触点不应成为油门');
+  fire('touchmove', [pt(1, 126, 646)], 20);
   A.input.update();
   eq(A.S.axes.roll, 0, '死区内不应有舵量');
   eq(A.S.axes.pitch, 0, '死区内不应有舵量');
-  fire('touchmove', [pt(1, 680, 720)], 60);
+  fire('touchmove', [pt(1, 200, 720)], 60);
   A.input.update();
-  ok(A.S.axes.roll > 0.3, '右半屏右滑 → 右滚，实际 ' + A.S.axes.roll.toFixed(2));
-  ok(A.S.axes.pitch > 0.3, '右半屏下滑 → 抬头，实际 ' + A.S.axes.pitch.toFixed(2));
-  fire('touchend', [pt(1, 680, 720)], 90);
+  ok(A.S.axes.roll > 0.3, '左半屏右滑 → 右滚，实际 ' + A.S.axes.roll.toFixed(2));
+  ok(A.S.axes.pitch > 0.3, '左半屏下滑 → 抬头，实际 ' + A.S.axes.pitch.toFixed(2));
+  fire('touchend', [pt(1, 200, 720)], 90);
   A.input.update();
   eq(A.S.axes.roll, 0, '松手摇杆回中');
   eq(T.st.active, false, '摇杆应释放');
 
-  /* 左半屏：油门（上滑加速，松手回中） */
-  fire('touchstart', [pt(2, 100, 900)], 100);
-  eq(T.st.thrId, 2, '左半屏触点应成为油门');
-  fire('touchmove', [pt(2, 100, 900 - 120)], 140);
+  /* 右半屏：油门（上滑加速，松手回中） */
+  fire('touchstart', [pt(2, 600, 900)], 100);
+  eq(T.st.thrId, 2, '右半屏触点应成为油门');
+  eq(T.st.stickId, null, '右半屏触点不应成为姿态摇杆');
+  fire('touchmove', [pt(2, 600, 900 - 120)], 140);
   A.input.update();
-  ok(A.S.axes.thr > 0.9, '左半屏上滑应给满油门，实际 ' + A.S.axes.thr.toFixed(2));
-  fire('touchmove', [pt(2, 100, 900 + 120)], 180);
+  ok(A.S.axes.thr > 0.9, '右半屏上滑应给满油门，实际 ' + A.S.axes.thr.toFixed(2));
+  eq(A.S.axes.roll, 0, '油门不应影响姿态');
+  fire('touchmove', [pt(2, 600, 900 + 120)], 180);
   A.input.update();
-  ok(A.S.axes.thr < -0.9, '左半屏下滑应减速');
-  fire('touchend', [pt(2, 100, 900)], 200);
+  ok(A.S.axes.thr < -0.9, '右半屏下滑应减速');
+  fire('touchend', [pt(2, 600, 900)], 200);
   A.input.update();
   eq(A.S.axes.thr, 0, '油门松手应回中');
 
-  /* 双指：右半屏姿态 + 左半屏油门可同时生效 */
-  fire('touchstart', [pt(3, 600, 640)], 300);
-  fire('touchstart', [pt(4, 120, 900)], 310);
-  fire('touchmove', [pt(3, 660, 640), pt(4, 120, 780)], 340);
+  /* 双指：左半屏姿态 + 右半屏油门可同时生效 */
+  fire('touchstart', [pt(3, 120, 640)], 300);
+  fire('touchstart', [pt(4, 600, 900)], 310);
+  fire('touchmove', [pt(3, 180, 640), pt(4, 600, 780)], 340);
   A.input.update();
   ok(A.S.axes.roll > 0.3 && A.S.axes.thr > 0.5, '左右半屏应能同时操控');
   fire('touchend', [pt(3, 660, 640), pt(4, 120, 780)], 360);
   A.input.update();
 
-  /* 轻点 = 暂停 / 继续 */
+  /* 轻点 = 暂停 / 继续（两半屏都可以） */
   eq(A.game.fsm.cur, 'play', '轻点前在飞行中');
   fire('touchstart', [pt(5, 620, 700)], 400);
   fire('touchend', [pt(5, 620, 700)], 480);
-  eq(A.game.fsm.cur, 'pause', '轻点右半屏应暂停');
+  eq(A.game.fsm.cur, 'pause', '轻点右半屏（油门侧）应暂停');
   fire('touchstart', [pt(6, 100, 700)], 600);
   fire('touchend', [pt(6, 100, 700)], 660);
-  eq(A.game.fsm.cur, 'play', '轻点左半屏应继续');
+  eq(A.game.fsm.cur, 'play', '轻点左半屏（姿态侧）应继续');
 
   /* 拖动后抬起不应被当成轻点 */
   fire('touchstart', [pt(7, 620, 700)], 700);
@@ -895,11 +898,16 @@ group('触屏分屏', () => {
   t.dispatch('touchstart', { changedTouches: [pt(10, 600, 640)], timeStamp: 900, target: panelTarget, cancelable: true });
   eq(T.st.stickId, null, '落在菜单面板上的触摸应交给浏览器');
 
-  /* HUD 分屏可视化不应抛异常 */
-  fire('touchstart', [pt(11, 600, 640)], 1000);
-  fire('touchmove', [pt(11, 660, 690)], 1030);
+  /* HUD 分屏可视化不应抛异常：左半屏摇杆框 + 右半屏油门刻度条都要画到 */
+  fire('touchstart', [pt(11, 120, 640)], 1000);
+  fire('touchmove', [pt(11, 180, 690)], 1030);
+  fire('touchstart', [pt(12, 600, 900)], 1040);
+  fire('touchmove', [pt(12, 600, 800)], 1050);
   A.game.loop.render();
-  fire('touchend', [pt(11, 660, 690)], 1060);
+  const hudRows = t.hook.dump().split('\n');
+  const midRow = hudRows[Math.round(V.ROWS / 2)];
+  ok(midRow.charAt(V.COLS - 2) !== ' ', '右侧应画出油门刻度条');
+  fire('touchend', [pt(11, 180, 690), pt(12, 600, 800)], 1060);
   ok(true, '分屏 HUD 绘制正常');
 });
 

@@ -2,9 +2,10 @@
    ASCII FPV · 触屏控制
    ---------------------------------------------------------------------
    左右分屏（默认）：
-     左半屏  上下拖动 = 油门，松手后保持当前油门（像真油门杆一样）
-     右半屏  任意处按住拖动 = 姿态摇杆（相对起手点，越远舵量越大）
+     左半屏  任意处按住拖动 = 姿态摇杆（相对起手点，越远舵量越大）
+     右半屏  上下拖动 = 油门（上滑加速 / 下滑减速，松手回中）
      轻点任意半屏 = 暂停 / 继续，坠机后轻点即重来
+   —— 姿态在左、油门在右，与常见双摇杆 / 手柄布局一致（左杆管方向）。
    单摇杆（设置可切回，与原实现一致）：
      单指拖动 = 姿态，双指上下滑 = 油门
    落在菜单面板上的触摸交给浏览器，保证按钮可点、面板可滚。
@@ -26,10 +27,10 @@
 
   T.st = {
     layout: 'split',
-    /* 右半屏姿态摇杆 */
+    /* 左半屏姿态摇杆 */
     stickId: null, stickX0: 0, stickY0: 0, stickT0: 0, moved: false, tapOk: false,
     stickVX: 0, stickVY: 0, active: false,
-    /* 左半屏油门 */
+    /* 右半屏油门 */
     thrId: null, thrY0: 0, thrT0: 0, thrMoved: false, thrTapOk: false,
     thrHold: 0, thrV: 0,    /* 单摇杆布局下的第二指油门 */
     thr2Id: null, thr2Y0: 0, thr2V: 0
@@ -85,13 +86,13 @@
       var t = e.changedTouches[i];
       var half = halfOf(t.clientX, win);
       if (split) {
-        if (half === 'right' && st.stickId === null) {
+        if (half === 'left' && st.stickId === null) {
           st.stickId = t.identifier; st.stickX0 = t.clientX; st.stickY0 = t.clientY;
           st.stickT0 = e.timeStamp; st.moved = false; st.tapOk = true; st.active = true;
-        } else if (half === 'left' && st.thrId === null) {
+        } else if (half === 'right' && st.thrId === null) {
           st.thrId = t.identifier; st.thrY0 = t.clientY; st.thrHold = 0;
           st.thrT0 = e.timeStamp; st.thrMoved = false; st.thrTapOk = true;
-        } else if (half === 'right') {                       // 右半屏第二指：重设摇杆基点
+        } else if (half === 'left') {                        // 左半屏第二指：重设摇杆基点
           st.stickX0 = t.clientX; st.stickY0 = t.clientY; st.stickT0 = e.timeStamp;
           st.moved = false; st.tapOk = false;
         }
@@ -173,15 +174,15 @@
     var st = T.st, COLS = V.COLS, ROWS = V.ROWS;
     var cy = Math.round(ROWS / 2);
     if (st.layout === 'split') {
-      /* 左：油门刻度条（纵向），当前油门用实心块表示 */
-      var x = 2, top = cy - 9, bot = cy + 9;
+      /* 右：油门刻度条（纵向），当前油门用实心块表示 */
+      var x = COLS - 2, top = cy - 9, bot = cy + 9;
       vline(hudCh, x, top, bot, 124, C.C_DIM);
       var cur = Math.round(cy - st.thrHold * 9);
       var a = Math.min(cur, cy), b = Math.max(cur, cy);
       for (var y = a; y <= b; y++) hudCh(x, y, 35, st.thrHold > 0.02 ? C.C_AMB : C.C_CYAN);
       hudCh(x, cur, st.thrId !== null ? 111 : 43, C.C_AMB);
       hudCh(x, cy, 43, C.C_CYAN);
-      /* 右：摇杆基点方框 + 摇杆头 */
+      /* 左：摇杆基点方框 + 摇杆头 */
       if (st.stickId !== null) {
         var c = T.toCell(st.stickX0, st.stickY0, g);
         var sx0 = c[0], sy0 = c[1];
@@ -206,8 +207,8 @@
           hudCh(cx + Math.round(jx * m / jn), cy + Math.round(jy * m / jn), m === jn ? 111 : 46, C.C_AMB);
         }
       }
+      /* 单摇杆布局的油门在双指上，用一个小箭头标记 */
+      hudCh(5, cy - Math.round(st.thrHold * 9), st.thrHold >= 0 ? 94 : 118, C.C_AMB);
     }
-    /* 油门数值：左侧刻度条 */
-    hudCh(5, cy - Math.round(st.thrHold * 9), st.thrHold >= 0 ? 94 : 118, C.C_AMB);
   };
 })(typeof window !== 'undefined' ? window : globalThis);
