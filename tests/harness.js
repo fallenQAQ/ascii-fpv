@@ -58,6 +58,8 @@ function boot(opts) {
     save: function () { }, restore: function () { }, setTransform: function () { },
     beginPath: function () { }, closePath: function () { }, fill: function () { }, stroke: function () { }
   };
+  /* 有些浏览器没有 ctx.letterSpacing（Firefox < 89 等），可单独覆盖该回退分支 */
+  if (opts.noLetterSpacing) delete ctx.letterSpacing;
   const canvas = doc.createElement('canvas');
   canvas.width = 0; canvas.height = 0;
   canvas.getContext = function () { return ctx; };

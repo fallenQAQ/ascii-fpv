@@ -5,12 +5,10 @@
   'use strict';
   var AFP = g.AFP;
   AFP.i18n.dicts.en = {
-    'lang.name': 'English',
     'lang.other': '中文',
 
     'app.title': 'ASCII FPV · City Run',
     'app.subtitle': 'Every frame is coloured ASCII characters · not real 3D rendering',
-    'app.go': 'Click anywhere / press any key to fly',
 
     'menu.tagline': 'Fly the city, thread the rings',
     'menu.campaign': 'Campaign',
@@ -31,7 +29,6 @@
     'levels.best': 'best {t}',
     'levels.bestLabel': 'Best time',
     'levels.clear': 'cleared',
-    'levels.needUnlock': 'Clear the previous level first',
 
     'settings.title': 'Settings',
     'settings.sub': 'Changes are saved to this browser instantly',
@@ -50,6 +47,7 @@
     'settings.gyroInvertRoll': 'Invert gyro roll',
     'settings.gyroCalib': 'Calibrate gyro (current attitude = zero)',
     'settings.gyroCalibrated': 'Calibrated — hold a comfy pose and tap again to redo',
+    'settings.gyro': 'Gyroscope',
     'settings.gyroUnsupported': 'Gyroscope is not available on this device/browser',
     'settings.gyroDenied': 'Motion permission denied — allow it in system settings and retry',
     'settings.gyroHint': 'This device asks for motion & orientation permission',
@@ -65,7 +63,6 @@
     'settings.collide.sub': 'Turn off to fly through buildings for sightseeing',
     'settings.resetBest': 'Clear best distance',
     'settings.resetProgress': 'Clear level progress',
-    'settings.resetDone': 'Cleared',
     'settings.on': 'ON',
     'settings.off': 'OFF',
 
@@ -119,21 +116,14 @@
     'hud.hdg': 'HDG',
     'hud.dist': 'DIST',
     'hud.best': 'BEST',
-    'hud.gate': 'GATE',
-    'hud.gateLeft': 'Rings left',
     'hud.raceTime': 'TIME',
-    'hud.free': 'FREE FLIGHT',
     'hud.level': 'LEVEL {n}',
-    'hud.paused': 'PAUSED',
-    'hud.crashed': 'CRASHED',
     'hud.lowalt': 'LOW ALT',
     'hud.banklim': 'BANK LIM',
     'hud.pitchlim': 'PITCH LIM',
     'hud.gyro': 'GYRO',
-    'hud.stick': 'STICK',
     'hud.target': 'TARGET',
     'hud.gates': 'RING {i}/{n}',
-    'hud.complete': 'ALL RINGS CLEARED · RTB',
     'hud.hint.key': 'W/S PITCH  A/D ROLL  Z/X THROTTLE  R RESET  H HUD  C COLLIDE  SPACE/ESC PAUSE',
     'hud.hint.touch.split': 'LEFT HALF DRAG = ATTITUDE   RIGHT HALF UP/DOWN = THROTTLE   TAP = PAUSE',
     'hud.hint.touch.single': 'DRAG = ATTITUDE   2-FINGER UP/DOWN = THROTTLE   TAP = PAUSE',

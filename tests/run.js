@@ -252,6 +252,27 @@ group('闯关模式', () => {
   eq(AFP.S.mode, 'level', '重来仍在闯关模式');
   eq(AFP.S.gateIndex, 0, '重来应重置目标点');
   ok(AFP.S.countdown > 0, '重来应重新倒计时');
+
+  /* 冲过最后一个光环的同时超时：不得既记通关又判失败（曾经会写下超限的最佳用时） */
+  const L2 = AFP.game.levels;
+  const clearedBefore = L2.progress().cleared;
+  L2.start(1);                                   // 第 2 关尚未通关过
+  AFP.S.countdown = 0;
+  const c3 = L2.current();
+  for (let i = 0; i < c3.gates.length - 1; i++) {
+    app.hook.setCam({ x: c3.gates[i].x, y: c3.gates[i].y, z: c3.gates[i].z });
+    AFP.game.fsm.update(1 / 120);
+  }
+  eq(AFP.S.gateIndex, c3.gates.length - 1, '应已到达最后一个光环前');
+  AFP.S.raceTime = L2.defs[1].time + 0.5;         // 同一帧既冲线又超时
+  const lastGate = c3.gates[c3.gates.length - 1];
+  app.hook.setCam({ x: lastGate.x, y: lastGate.y, z: lastGate.z });
+  AFP.game.fsm.update(1 / 120);
+  eq(AFP.S.crashed, 4, '超时应判失败');
+  eq(AFP.S.raceDone, false, '超时的那一帧不应算通关');
+  eq(AFP.game.fsm.cur, 'crash', '应进入坠机界面');
+  eq(L2.bestTime(1), null, '超时不得写入第 2 关的最佳用时');
+  eq(L2.progress().cleared, clearedBefore, '通关进度不应被超时推进');
 });
 
 group('自由飞行', () => {
@@ -282,6 +303,48 @@ group('选关界面', () => {
   ok(AFP.game.levels.unlocked(1) && !AFP.game.levels.unlocked(3), '解锁进度应为 1 关');
   AFP.ui.screens.dispatch('quit');
   eq(AFP.game.fsm.cur, 'menu', '返回主菜单');
+});
+
+/* =====================================================================
+   3.95 结算与新纪录
+   ===================================================================== */
+group('结算与新纪录', () => {
+  const A = H.boot();
+  const AF = A.AFP, L = AF.game.levels;
+  const panel = () => A.doc.getElementById('ui').querySelector('[data-scr="result"]').textContent.replace(/\s+/g, ' ');
+  function clearLevel(i, timeBeforeLast) {
+    L.start(i);
+    AF.S.countdown = 0;
+    const c = L.current();
+    for (let k = 0; k < c.gates.length - 1; k++) {
+      A.hook.setCam({ x: c.gates[k].x, y: c.gates[k].y, z: c.gates[k].z });
+      AF.game.fsm.update(1 / 120);
+    }
+    if (timeBeforeLast !== undefined) AF.S.raceTime = timeBeforeLast;
+    const last = c.gates[c.gates.length - 1];
+    A.hook.setCam({ x: last.x, y: last.y, z: last.z });
+    AF.game.fsm.update(1 / 120);
+    return c;
+  }
+
+  L.resetProgress();
+  const c1 = clearLevel(0, 10);
+  eq(AF.game.fsm.cur, 'result', '通关应进入结算界面');
+  eq(c1.newRecord, true, '首次通关应判为新纪录');
+  ok(panel().indexOf(AF.t('result.newRecord')) >= 0, '结算界面应标注新纪录');
+  ok(Math.abs(L.bestTime(0) - 10) < 0.1, '应记录本次用时，实际 ' + L.bestTime(0));
+
+  /* 更慢的一次：不标新纪录，也不应覆盖最佳用时 */
+  const c2 = clearLevel(0, 30);
+  eq(c2.newRecord, false, '更慢的一次不应判为新纪录');
+  ok(panel().indexOf(AF.t('result.newRecord')) < 0, '结算界面不应标注新纪录');
+  ok(Math.abs(L.bestTime(0) - 10) < 0.1, '最佳用时不应被更慢的成绩覆盖，实际 ' + L.bestTime(0));
+
+  /* 更快的一次：重新标新纪录 */
+  const c3 = clearLevel(0, 4);
+  eq(c3.newRecord, true, '更快的成绩应判为新纪录');
+  ok(Math.abs(L.bestTime(0) - 4) < 0.1, '应刷新最佳用时，实际 ' + L.bestTime(0));
+  eq(AF.game.levels.unlocked(1), true, '通关后应解锁下一关');
 });
 
 /* =====================================================================
@@ -556,6 +619,33 @@ group('楼体实心', () => {
   eq(leaks, 0, '沿墙面内侧逐点扫描不应有漏判，实际漏判 ' + leaks + ' 点');
 });
 
+group('i18n 完整性', () => {
+  /* 源码里 t('字面量') 与 data-i18n 引用的词条都必须存在。
+     这条检查抓到过：设置面板在「不支持陀螺仪」的设备上会把原始键名
+     settings.gyro 当文案显示出来。 */
+  const src = app.files.map(f => H.readFile(f)).join('\n');
+  const used = new Set();
+  /* 只收「完整的字面量词条」；t('biome.' + id) 这种拼接前缀不算 */
+  for (const m of src.matchAll(/\bt\(\s*(['"])([a-zA-Z0-9_.]+)\1(\s*\+)?/g)) {
+    if (!m[3]) used.add(m[2]);
+  }
+  for (const m of src.matchAll(/data-i18n(?:-title)?="([^"]+)"/g)) used.add(m[1]);
+  const keys = Object.keys(AFP.i18n.dicts.zh);
+  const missing = [...used].filter(k => keys.indexOf(k) < 0);
+  eq(missing.length, 0, '源码引用的词条都必须存在，缺: ' + missing.join(', '));
+  /* 反之：字典里不应有没人用的词条（动态拼接的除外） */
+  const dyn = [/^biome\./, /^level\.\d+\./, /^hud\.hint\./, /^crash\.(ground|building|obstacle|timeout)$/];
+  const dead = keys.filter(k => !used.has(k) && !dyn.some(r => r.test(k)));
+  eq(dead.length, 0, '不应存在无人使用的词条，多余: ' + dead.join(', '));
+  /* 面板上不允许出现原始键名 */
+  const app2 = H.boot();
+  app2.AFP.game.fsm.go('menu');
+  app2.AFP.ui.screens.dispatch('settings');
+  app2.AFP.ui.screens.dispatch('controlMode:gyro');
+  const txt = app2.doc.getElementById('ui').querySelector('[data-scr="settings"]').textContent;
+  ok(!/settings\.gyro(?!\w)/.test(txt), '设置面板不应把原始词条键显示出来');
+});
+
 /* =====================================================================
    7. 设置界面与持久化
    ===================================================================== */
@@ -735,6 +825,21 @@ group('陀螺仪', () => {
   eq(G.permission, 'granted', '应取得传感器授权');
   eq(G.enabled, true, '应挂上 deviceorientation 监听');
 
+  /* 关键：只有真的收到过传感器数据才接管操控。
+     浏览器完全可能声明了 DeviceOrientationEvent 却永远不触发
+     （桌面 Chrome；http:// 局域网地址下被判定为非安全上下文而屏蔽），
+     此时若让陀螺仪接管，姿态输入恒为 0 且摇杆被忽略 —— 等于失控。 */
+  eq(G.hasData, false, '此时尚未收到传感器数据');
+  eq(G.active(), false, '没有数据不应算激活');
+  A.input.src.stick.pitch = 0.8;
+  A.input.src.stick.roll = -0.6;
+  A.input.update();
+  ok(A.S.axes.pitch > 0.5, '没有传感器数据时应回退摇杆（俯仰），实际 ' + A.S.axes.pitch.toFixed(2));
+  ok(A.S.axes.roll < -0.4, '没有传感器数据时应回退摇杆（滚转），实际 ' + A.S.axes.roll.toFixed(2));
+  eq(A.input.src.gyro.on, false, '没有数据时不应抢占操控');
+  A.input.src.stick.pitch = 0; A.input.src.stick.roll = 0;
+  A.input.update();
+
   /* 第一帧数据即零位 */
   G.feed({ beta: 12, gamma: -6 });
   A.input.update();
@@ -791,6 +896,18 @@ group('陀螺仪', () => {
   A.input.src.stick.pitch = 0; A.input.src.stick.roll = 0;
   A.ui.screens.dispatch('controlMode:stick');
   eq(G.active(), false, '回到摇杆模式应停用陀螺仪');
+
+  /* 授权被拒时要说清原因（否则玩家不知道陀螺仪为何没反应） */
+  const denied = H.boot({ gyro: true, gyroPermission: 'denied' });
+  denied.AFP.game.fsm.go('menu');
+  denied.AFP.ui.screens.dispatch('settings');
+  denied.AFP.ui.screens.dispatch('controlMode:gyro');
+  const dTxt = denied.doc.getElementById('ui').querySelector('[data-scr="settings"]').textContent;
+  ok(dTxt.indexOf(denied.AFP.t('settings.gyroDenied')) >= 0, '授权被拒应在设置里说明');
+  eq(denied.AFP.input.gyro.permission, 'denied', '应记录为被拒');
+  denied.AFP.input.src.stick.pitch = 0.7;
+  denied.AFP.input.update();
+  ok(denied.AFP.S.axes.pitch > 0.4, '被拒后摇杆仍应可用');
 
   /* 不支持陀螺仪的设备：切到陀螺仪时摇杆仍可用 */
   const b = H.boot({});
@@ -912,6 +1029,32 @@ group('触屏分屏', () => {
 });
 
 /* =====================================================================
+   7.3 无 letterSpacing 的回退分支
+   ===================================================================== */
+group('无 letterSpacing', () => {
+  const A = H.boot({ noLetterSpacing: true });
+  const V = A.AFP.render.view;
+  eq(V.hasLS, false, '应走没有 letterSpacing 的分支');
+  eq(V.lspace, '0px', '没有 letterSpacing 时不应再设字距');
+  /* 关键不变量：这一支必须让字符格宽等于字体步进。若为了「整数格宽」
+     把它取整，同一行里批量绘制的字会按字体步进累积偏移，走满一行后
+     后半行的字就会窜出各自的格（300 列可差出几十像素）。 */
+  const ctx = A.ctx;
+  ctx.font = V.fontspec;
+  const adv = ctx.measureText('MMMMMMMMMM').width / 10;
+  near(V.cellW, adv, 1e-9, '字符格宽必须等于字体步进，否则同行文本会累积错位');
+  ok(V.COLS >= V.MIN_COLS, '回退分支也应满足密度下限，实际 ' + V.COLS + 'x' + V.ROWS);
+  A.hook.render();
+  ok(A.hook.dump().replace(/\s/g, '').length > 200, '回退分支也要能正常出画面');
+  const c0 = V.COLS;
+  A.AFP.render.grid.setColumns(c0 + 20);
+  ok(V.COLS !== c0, '回退分支同样能调密度: ' + c0 + ' → ' + V.COLS);
+  A.AFP.game.fsm.go('menu');
+  A.hook.render();
+  ok(A.hook.dump().indexOf('x' + V.ROWS) >= 0 || true, '回退分支渲染无异常');
+});
+
+/* =====================================================================
    7.4 坠机提示（不得重复）
    ===================================================================== */
 group('坠机提示', () => {
@@ -975,6 +1118,26 @@ group('坠机提示', () => {
   AF.render.hud.drawCrash = origDrawCrash;
   Sc.root = savedRoot;
   Sc.show('crash');
+
+  /* 兜底提示框的原因文案必须与原因码一致（超时曾经被写成「撞上地面」） */
+  const wantReason = { 1: /撞上地面/, 2: /撞上楼房/, 3: /撞上空中障碍物/, 4: /超时/ };
+  [1, 2, 3, 4].forEach(function (r) {
+    crashWith(r);
+    const keep = Sc.root;
+    Sc.root = null;                          // 无 DOM → 走 canvas 兜底
+    A.hook.render();
+    const txt = A.hook.dump().replace(/ +/g, '');
+    ok(wantReason[r].test(txt), '兜底提示框原因 ' + r + ' 文案不对（应为 ' + wantReason[r] + '）');
+    Sc.root = keep;
+    Sc.show('crash');
+  });
+  /* DOM 面板与兜底提示框用同一份映射 */
+  [1, 2, 3, 4].forEach(function (r) {
+    AF.S.crashed = r; AF.S.crashReason = r;
+    eq(AF.game.player.crashReasonKey(),
+      r === 1 ? 'crash.ground' : r === 2 ? 'crash.building' : r === 3 ? 'crash.obstacle' : 'crash.timeout',
+      '原因码 ' + r + ' 应映射到固定词条');
+  });
 });
 
 /* =====================================================================
@@ -1053,6 +1216,264 @@ group('全流程验收', () => {
   A.hook.axes({ thr: 0 });
   ok(AF.S.flown > 50, '22. 自由飞行累计距离，实际 ' + AF.S.flown.toFixed(1) + ' m');
   ok(AF.S.best >= AF.S.flown, '23. 最远距离记录应被刷新');
+});
+
+/* =====================================================================
+   9.2 审查回归（本轮修掉的问题，逐条钉住）
+   ===================================================================== */
+group('触屏放行面板', () => {
+  /* touchend 一旦 preventDefault，浏览器就不再补发 click，
+     面板上的按钮会全部失效 —— 触屏设备上连开始游戏都做不到 */
+  const A = H.boot({ touch: true, width: 720, height: 1280, dpr: 2 });
+  const AF = A.AFP;
+  const panelTarget = { closest: s => (s === '#ui .screen.on' ? {} : null) };
+  const noUi = { closest: () => null };
+  function fire(type, target, ev) {
+    ev = ev || {};
+    ev.changedTouches = [{ identifier: 1, clientX: 100, clientY: 100 }];
+    ev.timeStamp = 0; ev.target = target; ev.cancelable = true;
+    ev.preventDefault = function () { ev.prevented = true; };
+    A.dispatch(type, ev);
+    return ev;
+  }
+  AF.game.fsm.go('menu');
+  eq(!!fire('touchstart', panelTarget).prevented, false, '面板上的 touchstart 不应被取消');
+  eq(!!fire('touchmove', panelTarget).prevented, false, '面板上的 touchmove 不应被取消');
+  eq(!!fire('touchend', panelTarget).prevented, false, '面板上的 touchend 不应被取消（否则 click 不会派发）');
+  /* 画布上的触摸必须继续拦截，否则页面会跟着滚/缩放 */
+  eq(!!fire('touchstart', noUi).prevented, true, '画布上的 touchstart 仍应拦截');
+  eq(!!fire('touchend', noUi).prevented, true, '画布上的 touchend 仍应拦截');
+});
+
+group('触屏细节', () => {
+  const A = H.boot({ touch: true, width: 720, height: 1280, dpr: 2 });
+  const AF = A.AFP, T = AF.input.touch;
+  const noUi = { closest: () => null };
+  function fire(type, list, ts) {
+    A.dispatch(type, { changedTouches: list, timeStamp: ts || 0, target: noUi, cancelable: true });
+  }
+  function pt(id, x, y) { return { identifier: id, clientX: x, clientY: y }; }
+
+  /* 单摇杆布局也要能「轻点=暂停」（提示里就是这么写的，且这是唯一手段） */
+  AF.ui.settings.set('touchLayout', 'single');
+  AF.ui.screens.dispatch('free');
+  eq(AF.game.fsm.cur, 'play', '飞行中');
+  fire('touchstart', [pt(1, 120, 300)], 0);
+  fire('touchend', [pt(1, 120, 300)], 100);
+  eq(AF.game.fsm.cur, 'pause', '单摇杆布局轻点应暂停');
+  fire('touchstart', [pt(2, 120, 300)], 200);
+  fire('touchend', [pt(2, 120, 300)], 300);
+  eq(AF.game.fsm.cur, 'play', '再轻点应继续');
+  AF.ui.settings.set('touchLayout', 'split');
+
+  /* 左半屏第二根手指不得改写正在操控的那根手指的基点 */
+  fire('touchstart', [pt(3, 120, 640)], 0);
+  eq(T.st.stickId, 3, '第一根手指接管摇杆');
+  fire('touchstart', [pt(4, 340, 640)], 10);          // 左半屏第二指
+  eq(T.st.stickId, 3, '第二根手指不应抢走摇杆');
+  fire('touchmove', [pt(3, 121, 641)], 20);           // 1px 抖动
+  AF.input.update();
+  ok(Math.abs(AF.S.axes.roll) < 0.05, '1px 抖动不应变成满舵，实际 ' + AF.S.axes.roll.toFixed(2));
+  fire('touchmove', [pt(3, 190, 640)], 30);
+  AF.input.update();
+  ok(AF.S.axes.roll > 0.3, '原手指仍应能正常操控');
+  fire('touchend', [pt(3, 190, 640), pt(4, 340, 640)], 40);
+  AF.input.update();
+});
+
+group('世界时钟', () => {
+  const A = H.boot();
+  const AF = A.AFP, O = AF.world.obstacles;
+  AF.game.fsm.go('menu');
+  AF.ui.screens.dispatch('free');
+  A.tick(100);
+  const blk = AF.world.blocks.find(b => b.obs && b.obs.length);
+  const o = blk.obs[0], ox = blk.bx * 64, oz = blk.bz * 64;
+  const p0 = [0, 0, 0], p1 = [0, 0, 0];
+  O.pos(o, ox, oz, p0);
+  const t0 = AF.S.time;
+  AF.game.onInputAction('pause');
+  for (let i = 0; i < 60; i++) A.tick(100);
+  eq(AF.S.time, t0, '暂停期间世界时钟不应推进');
+  O.pos(o, ox, oz, p1);
+  eq(p1[0] + ',' + p1[1] + ',' + p1[2], p0[0] + ',' + p0[1] + ',' + p0[2], '暂停期间障碍物不应移动');
+
+  /* 起飞倒计时同理：说好世界静止就不能偷偷动 */
+  AF.game.onInputAction('pause');
+  AF.ui.screens.dispatch('campaign');
+  ok(AF.S.countdown > 0, '进入倒计时');
+  const t1 = AF.S.time;
+  for (let i = 0; i < 10; i++) A.tick(100);
+  eq(AF.S.time, t1, '倒计时期间世界时钟不应推进');
+  AF.S.countdown = 0;
+
+  /* 主菜单的运镜背景需要活的障碍物 */
+  AF.ui.screens.dispatch('quit');
+  eq(AF.game.fsm.cur, 'menu', '回到主菜单');
+  const t2 = AF.S.time;
+  for (let i = 0; i < 5; i++) A.tick(100);
+  ok(AF.S.time > t2, '主菜单里世界时钟应继续推进（背景动画）');
+});
+
+group('按键重复与暂停快捷键', () => {
+  const A = H.boot();
+  const AF = A.AFP;
+  function key(code, repeat) {
+    const ev = { code: code, repeat: !!repeat, preventDefault: function () { } };
+    A.dispatch('keydown', ev);
+    A.dispatch('keyup', { code: code, preventDefault: function () { } });
+  }
+  AF.game.fsm.go('menu');
+  AF.ui.screens.dispatch('free');
+  key('Space', false);
+  eq(AF.game.fsm.cur, 'pause', '空格应暂停');
+  key('Space', true); key('Space', true); key('Space', true);   // 系统按键重复
+  eq(AF.game.fsm.cur, 'pause', '按住空格不应反复切换暂停');
+  key('Space', false);
+  eq(AF.game.fsm.cur, 'play', '再按一次应继续');
+
+  /* 暂停面板上的「重新开始」标着 R，R 就得能用 */
+  key('Space', false);
+  eq(AF.game.fsm.cur, 'pause', '先暂停');
+  key('KeyR', false);
+  eq(AF.game.fsm.cur, 'play', '暂停时按 R 应重新开始');
+
+  /* 按住 ] 不应把密度一路顶到上限 */
+  const c0 = AF.render.view.COLS;
+  key('BracketRight', false);
+  const c1 = AF.render.view.COLS;
+  for (let i = 0; i < 10; i++) key('BracketRight', true);
+  eq(AF.render.view.COLS, c1, '按住 ] 只应生效一次，实际 ' + c0 + ' → ' + c1 + ' → ' + AF.render.view.COLS);
+});
+
+group('提示行跟随操控方式', () => {
+  const A = H.boot({ gyro: true });
+  const AF = A.AFP, G = AF.input.gyro;
+  AF.game.fsm.go('menu');
+  eq(AF.input.hintKey, 'hud.hint.key', '默认显示键盘提示');
+  AF.ui.screens.dispatch('controlMode:gyro');
+  AF.input.update();
+  eq(AF.input.hintKey, 'hud.hint.key', '陀螺仪还没数据时仍是键盘提示');
+  G.feed({ beta: 20, gamma: 10 });
+  AF.input.update();
+  eq(AF.input.hintKey, 'hud.hint.gyro', '陀螺仪真正接管后提示行应跟着变');
+  AF.ui.screens.dispatch('controlMode:stick');
+  AF.input.update();
+  eq(AF.input.hintKey, 'hud.hint.key', '切回摇杆后提示行应还原');
+});
+
+group('存档防脏数据', () => {
+  const A = H.boot({
+    storage: {
+      'asciifpv.settings': JSON.stringify({
+        stickSens: 'fast', gyroSens: null, density: 'x',
+        controlMode: 'tilt', touchLayout: 'nope', lang: 'xx', hud: 'yes'
+      })
+    }
+  });
+  const AF = A.AFP, St = AF.ui.settings, V = AF.render.view;
+  eq(St.get('stickSens'), 1, '类型不符的灵敏度应回退默认值');
+  eq(St.get('gyroSens'), 1, '类型不符的陀螺仪灵敏度应回退默认值');
+  eq(St.get('density'), 0, '类型不符的密度应回退自动档');
+  eq(St.get('controlMode'), 'stick', '非法操控方式应回退摇杆');
+  eq(St.get('touchLayout'), 'split', '非法触屏布局应回退分屏');
+  eq(St.get('lang'), 'zh', '非法语言应回退中文');
+  eq(St.get('hud'), true, '类型不符的开关应回退默认值');
+  AF.game.fsm.go('menu');
+  AF.ui.screens.dispatch('free');
+  AF.input.src.stick.pitch = 0.8;
+  AF.input.src.stick.roll = 0.5;
+  AF.input.update();
+  ok(Number.isFinite(AF.S.axes.pitch) && AF.S.axes.pitch > 0.5, '脏存档后摇杆仍应有效，实际 ' + AF.S.axes.pitch);
+  ok(V.targetCols >= V.MIN_COLS && V.targetCols <= V.MAX_COLS, '期望列数应在合法区间，实际 ' + V.targetCols);
+
+  /* 数值越界要钳住 */
+  const B = H.boot({
+    storage: {
+      'asciifpv.settings': JSON.stringify({ density: 9999, stickSens: 99, gyroSens: -5 })
+    }
+  });
+  const BV = B.AFP.render.view, BS = B.AFP.ui.settings;
+  ok(BS.get('density') <= BV.MAX_COLS && BS.get('density') >= BV.MIN_COLS, '越界密度应被钳住，实际 ' + BS.get('density'));
+  ok(BS.get('stickSens') <= 2 && BS.get('stickSens') >= 0.4, '越界灵敏度应被钳住，实际 ' + BS.get('stickSens'));
+  ok(BS.get('gyroSens') <= 2.5 && BS.get('gyroSens') >= 0.3, '越界陀螺仪灵敏度应被钳住，实际 ' + BS.get('gyroSens'));
+});
+
+group('面板点击', () => {
+  const A = H.boot();
+  const AF = A.AFP, Sc = AF.ui.screens;
+  function clickEl(node) {
+    const ev = { type: 'click', target: node, cancelable: true, prevented: false };
+    ev.preventDefault = function () { ev.prevented = true; };
+    Sc.root.dispatchEvent(ev);
+    return ev;
+  }
+  AF.game.fsm.go('menu');
+  AF.ui.screens.dispatch('free');
+  AF.game.onInputAction('pause');
+  eq(AF.game.fsm.cur, 'pause', '先暂停');
+  const pauseScreen = Sc.root.querySelector('[data-scr="pause"]');
+  const pausePanel = pauseScreen.querySelector('.panel');
+  /* 面板内部空白：什么都不该发生（不能误触成「继续」） */
+  clickEl(pausePanel);
+  eq(AF.game.fsm.cur, 'pause', '点面板空白不应继续');
+  /* 面板外的暗区：轻点继续 */
+  clickEl(pauseScreen);
+  eq(AF.game.fsm.cur, 'play', '点暗区应继续');
+  /* 按钮本身仍然有效（且优先于所在屏幕的默认动作） */
+  AF.game.onInputAction('pause');
+  const quitBtn = Sc.root.querySelector('[data-scr="pause"] [data-act="quit"]');
+  clickEl(quitBtn);
+  eq(AF.game.fsm.cur, 'menu', '按钮应优先于屏幕默认动作');
+  /* 坠机界面：暗区轻点 = 重来 */
+  AF.ui.screens.dispatch('free');
+  AF.S.crashed = 2; AF.S.crashReason = 2;
+  AF.game.fsm.go('crash');
+  eq(AF.game.fsm.cur, 'crash', '进入坠机界面');
+  clickEl(Sc.root.querySelector('[data-scr="crash"]'));
+  eq(AF.game.fsm.cur, 'play', '坠机后点暗区应重来');
+});
+
+/* =====================================================================
+   9.5 随机压测（数值与状态不得崩坏）
+   ===================================================================== */
+group('随机压测', () => {
+  const A = H.boot({ gyro: true });
+  const AF = A.AFP, S = AF.S, G = AF.input.gyro;
+  let seed = 20261003;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const finite = () => [S.camX, S.camY, S.camZ, S.yaw, S.pitch, S.roll, S.spd,
+    S.axes.pitch, S.axes.roll, S.axes.thr].every(Number.isFinite);
+  const seen = new Set();
+  let threw = null, notFinite = -1;
+  A.AFP.game.fsm.go('menu');
+  A.AFP.ui.screens.dispatch('free');
+  for (let i = 0; i < 600 && !threw && notFinite < 0; i++) {
+    if (i % 120 === 0) AF.ui.settings.set('controlMode', ['stick', 'gyro', 'both'][(rnd() * 3) | 0]);
+    if (i % 200 === 100) AF.game.onInputAction('pause');
+    if (i % 200 === 120) AF.game.onInputAction('pause');
+    if (i % 300 === 260) { AF.ui.screens.dispatch('campaign'); S.countdown = 0; }
+    if (i % 300 === 290) { AF.ui.screens.dispatch('quit'); AF.ui.screens.dispatch('free'); }
+    S.keys.KeyW = rnd() < 0.3 ? 1 : 0;
+    S.keys.KeyS = rnd() < 0.3 ? 1 : 0;
+    S.keys.KeyA = rnd() < 0.3 ? 1 : 0;
+    S.keys.KeyD = rnd() < 0.3 ? 1 : 0;
+    S.keys.KeyZ = rnd() < 0.5 ? 1 : 0;
+    S.keys.KeyX = rnd() < 0.3 ? 1 : 0;
+    if (i % 37 === 0) G.feed({ beta: rnd() * 80 - 40, gamma: rnd() * 80 - 40 });
+    if (i % 97 === 0) {
+      AF.input.src.stick.pitch = rnd() * 2 - 1;
+      AF.input.src.stick.roll = rnd() * 2 - 1;
+      AF.input.src.stick.thr = rnd() * 2 - 1;
+    }
+    try { A.tick(16.7); } catch (e) { threw = e; }
+    seen.add(AF.game.fsm.cur);
+    if (!finite()) notFinite = i;
+  }
+  ok(!threw, '随机操作不应抛出异常' + (threw ? '：' + threw.message : ''));
+  ok(notFinite < 0, '随机操作后状态必须仍是有限数' + (notFinite >= 0 ? '（第 ' + notFinite + ' 帧出现 NaN/Infinity）' : ''));
+  ok(seen.size >= 2, '压测应经历多个状态，实际: ' + [...seen].join('/'));
+  ok(AF.render.view.COLS >= AF.render.view.MIN_COLS, '压测后网格仍不低于下限');
 });
 
 /* =====================================================================

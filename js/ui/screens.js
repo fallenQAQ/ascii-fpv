@@ -48,7 +48,8 @@
         '</div></div>';
     },
     pause: function () {
-      return '<div class="screen bottom" data-scr="pause"><div class="panel">' +
+      /* 屏幕本身带 data-act：面板外的暗区轻点 = 继续（与「轻点屏幕暂停/继续」一致） */
+      return '<div class="screen bottom" data-scr="pause" data-act="resume"><div class="panel">' +
         '<h1 data-i18n="pause.title"></h1>' +
         '<div data-dyn="pauseStats"></div>' +
         '<button class="btn primary" data-act="resume">' +
@@ -60,7 +61,8 @@
         '</div></div>';
     },
     crash: function () {
-      return '<div class="screen bottom" data-scr="crash"><div class="panel">' +
+      /* 面板外的暗区轻点 = 重来（老版本的「TAP TO RESPAWN」） */
+      return '<div class="screen bottom" data-scr="crash" data-act="retry"><div class="panel">' +
         '<h1 data-i18n="crash.title"></h1>' +
         '<div class="dim" data-dyn="crashReason"></div>' +
         '<div data-dyn="crashStats"></div>' +
@@ -89,11 +91,19 @@
     if (!Sc._wired) {
       Sc._wired = true;
       host.addEventListener('click', function (e) {
+        /* 从点击处往上找最近的动作。碰到 .panel 就停：面板内部的空白
+           点击不应触发该屏幕的默认动作（暂停界面点背景继续、坠机界面
+           点背景重来都只认面板外的暗区），这样才不会误触。 */
         var el = e.target;
-        while (el && el !== host && !(el.getAttribute && el.getAttribute('data-act'))) el = el.parentNode;
-        if (!el || el === host) return;
-        var act = el.getAttribute('data-act');
-        if (act) { e.preventDefault(); Sc.dispatch(act, el); }
+        while (el && el !== host) {
+          if (el.getAttribute && el.getAttribute('data-act')) {
+            e.preventDefault();
+            Sc.dispatch(el.getAttribute('data-act'), el);
+            return;
+          }
+          if (el.className && /(^|\s)panel(\s|$)/.test(el.className)) return;
+          el = el.parentNode;
+        }
       });
     }
     if (Sc.cur) Sc.show(Sc.cur); else Sc.update();
@@ -168,16 +178,11 @@
     return '<div class="stat' + (amber ? ' amber' : '') + '"><span>' + k + '</span><b>' + v + '</b></div>';
   }
   function crashReasonText() {
-    var r = AFP.S.crashReason;
-    return r === 2 ? t('crash.building')
-      : r === 3 ? t('crash.obstacle')
-        : r === 4 ? t('crash.timeout')
-          : t('crash.ground');
+    return t(AFP.game.player.crashReasonKey());
   }
   function runStats() {
     var S = AFP.S;
     return {
-      reason: S.crashed ? crashReasonText() : '',
       dist: (S.flown / 1000).toFixed(2) + ' KM',
       best: (S.best / 1000).toFixed(2) + ' KM',
       gates: S.mode === 'level' ? (S.stats.gates + ' / ' + (S.gates.length || 0)) : '',
@@ -221,7 +226,6 @@
     return false;
   };
 
-  AFP.ui.fmt = { statRow: statRow };
   Sc.statsHtml = statsHtml;
   Sc.helpHtml = helpHtml;
 })(typeof window !== 'undefined' ? window : globalThis);

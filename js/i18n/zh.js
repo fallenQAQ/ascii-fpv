@@ -5,12 +5,10 @@
   'use strict';
   var AFP = g.AFP;
   AFP.i18n.dicts.zh = {
-    'lang.name': '中文',
     'lang.other': 'English',
 
     'app.title': 'ASCII FPV · 楼宇穿越',
     'app.subtitle': '全部画面由彩色 ASCII 字符排列而成 · 非真 3D 渲染',
-    'app.go': '点击任意处 / 按任意键 起飞',
 
     'menu.tagline': '穿越城市，穿过光环',
     'menu.campaign': '闯关模式',
@@ -31,7 +29,6 @@
     'levels.best': '最佳 {t}',
     'levels.bestLabel': '最佳用时',
     'levels.clear': '已通关',
-    'levels.needUnlock': '先通关前一关才能解锁',
 
     'settings.title': '设置',
     'settings.sub': '改动即时保存到本地浏览器',
@@ -50,6 +47,7 @@
     'settings.gyroInvertRoll': '陀螺仪滚转反向',
     'settings.gyroCalib': '陀螺仪校准（以当前姿态为零位）',
     'settings.gyroCalibrated': '已校准：把设备摆成舒适姿势后再点一次',
+    'settings.gyro': '陀螺仪',
     'settings.gyroUnsupported': '此设备 / 浏览器不支持陀螺仪',
     'settings.gyroDenied': '陀螺仪权限被拒绝，请在系统设置中允许后重试',
     'settings.gyroHint': '需要在此设备上授权运动与方向传感器',
@@ -65,7 +63,6 @@
     'settings.collide.sub': '关闭后可无伤穿楼，用于观光',
     'settings.resetBest': '清除最远距离记录',
     'settings.resetProgress': '清除关卡进度',
-    'settings.resetDone': '已清除',
     'settings.on': '开',
     'settings.off': '关',
 
@@ -119,21 +116,14 @@
     'hud.hdg': 'HDG',
     'hud.dist': 'DIST',
     'hud.best': 'BEST',
-    'hud.gate': 'GATE',
-    'hud.gateLeft': '剩余光环',
     'hud.raceTime': '计时',
-    'hud.free': '自由飞行',
     'hud.level': '第 {n} 关',
-    'hud.paused': '已暂停',
-    'hud.crashed': '坠机',
     'hud.lowalt': '高度过低',
     'hud.banklim': '滚转限幅',
     'hud.pitchlim': '俯仰限幅',
     'hud.gyro': '陀螺仪',
-    'hud.stick': '摇杆',
     'hud.target': '目标',
     'hud.gates': '光环 {i}/{n}',
-    'hud.complete': '全部光环已穿过 · 返航',
     'hud.hint.key': 'W/S 俯仰  A/D 滚转  Z/X 油门  R 重生  H HUD  C 碰撞  空格/ESC 暂停',
     'hud.hint.touch.split': '左半屏拖动=姿态   右半屏上下滑=油门   轻点=暂停',
     'hud.hint.touch.single': '单指拖动=姿态   双指上下滑=油门   轻点=暂停',

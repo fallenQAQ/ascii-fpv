@@ -31,10 +31,23 @@
   St.get = function (k) { return vals[k]; };
   St.values = function () { return vals; };
 
+  /* 读档要防脏数据：localStorage 可能被手改、被旧版本写坏、或跨版本冲突。
+     类型不符直接忽略，数值再钳一次 —— 否则一个 stickSens:"fast" 就能让
+     操控量变成 NaN（摇杆彻底失灵），density:"x" 能把网格顶到 300 列以外，
+     controlMode:"tilt" 会让摇杆和陀螺仪同时失效。 */
   St.load = function () {
     var saved = AFP.store.get('settings', null);
     if (saved && typeof saved === 'object') {
-      for (var k in DEFAULTS) if (saved[k] !== undefined) vals[k] = saved[k];
+      for (var k in DEFAULTS) {
+        if (saved[k] === undefined || typeof saved[k] !== typeof DEFAULTS[k]) continue;
+        vals[k] = saved[k];
+      }
+      vals.lang = AFP.i18n.LANGS.indexOf(vals.lang) >= 0 ? vals.lang : DEFAULTS.lang;
+      vals.controlMode = ['stick', 'gyro', 'both'].indexOf(vals.controlMode) >= 0 ? vals.controlMode : DEFAULTS.controlMode;
+      vals.touchLayout = ['split', 'single'].indexOf(vals.touchLayout) >= 0 ? vals.touchLayout : DEFAULTS.touchLayout;
+      vals.stickSens = U.clamp(+vals.stickSens || 1, 0.4, 2);
+      vals.gyroSens = U.clamp(+vals.gyroSens || 1, 0.3, 2.5);
+      if (vals.density) vals.density = U.clamp(+vals.density || V.autoCols, V.MIN_COLS, V.MAX_COLS);
     }
     St.applyAll();
     return vals;
@@ -100,7 +113,7 @@
       '<button data-act="' + act + ':0"' + (!on ? ' class="on"' : '') + '>' + t('settings.off') + '</button>' +
       '</span>';
   }
-  function sens(act, v, min, max, step) {
+  function sens(act, v, min, max) {
     var pct = Math.round(v * 100) + '%';
     return '<span class="seg">' +
       '<button data-act="' + act + ':-"' + (v <= min + 1e-6 ? ' disabled' : '') + '>-</button>' +
@@ -143,9 +156,12 @@
         h += row(t('settings.gyroSens'), sens('gyroSens', vals.gyroSens, 0.3, 2.5));
         h += row(t('settings.gyroInvertPitch'), toggle('gyroInvertPitch', !!vals.gyroInvertPitch));
         h += row(t('settings.gyroInvertRoll'), toggle('gyroInvertRoll', !!vals.gyroInvertRoll));
+        var gyroSub = AFP.input.gyro && AFP.input.gyro.permission === 'denied'
+          ? t('settings.gyroDenied')                                  // 授权被拒：说清为什么没用
+          : (AFP.input.gyro && AFP.input.gyro.calibrated ? t('settings.gyroCalibrated') : t('settings.gyroHint'));
         h += row(t('settings.gyroCalib'),
           '<button class="btn" style="margin:0" data-act="gyroCalib">' + t('settings.gyroCalib') + '</button>',
-          AFP.input.gyro && AFP.input.gyro.calibrated ? t('settings.gyroCalibrated') : t('settings.gyroHint'));
+          gyroSub);
       } else {
         h += row(t('settings.gyro'), '<span class="dim">' + t('settings.gyroUnsupported') + '</span>');
       }

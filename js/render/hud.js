@@ -292,7 +292,7 @@
   }
   function drawCrash() {
     var cx = Math.round(V.cxF - 0.5), cy = Math.round(V.cyF - 0.5);
-    var reasonKey = S.crashReason === 2 ? 'crash.building' : (S.crashReason === 3 ? 'crash.obstacle' : 'crash.ground');
+    var reasonKey = AFP.game.player.crashReasonKey();
     var title = '* ' + t('crash.title') + ' *';
     var l1 = t(reasonKey);
     var l2 = t('crash.dist') + ' ' + (S.flown / 1000).toFixed(2) + ' KM';
