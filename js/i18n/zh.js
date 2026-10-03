@@ -136,6 +136,12 @@
     'hud.hint.touch.single': '单指拖动=姿态   双指上下滑=油门   轻点=暂停',
     'hud.hint.gyro': '倾斜设备=姿态   左半屏上下滑=油门   轻点=暂停',
 
+    'biome.downtown': '市中心',
+    'biome.midtown': '商业区',
+    'biome.suburb': '住宅区',
+    'biome.industry': '工业区',
+    'biome.park': '公园区',
+
     'level.1.name': '起飞',
     'level.1.desc': '先熟悉手感，穿过 4 个光环',
     'level.2.name': '楼宇之间',

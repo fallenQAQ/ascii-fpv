@@ -136,6 +136,12 @@
     'hud.hint.touch.single': 'DRAG = ATTITUDE   2-FINGER UP/DOWN = THROTTLE   TAP = PAUSE',
     'hud.hint.gyro': 'TILT DEVICE = ATTITUDE   LEFT HALF UP/DOWN = THROTTLE   TAP = PAUSE',
 
+    'biome.downtown': 'DOWNTOWN',
+    'biome.midtown': 'MIDTOWN',
+    'biome.suburb': 'SUBURB',
+    'biome.industry': 'INDUSTRIAL',
+    'biome.park': 'PARK',
+
     'level.1.name': 'Takeoff',
     'level.1.desc': 'Get a feel for it, pass 4 rings',
     'level.2.name': 'Between Towers',

@@ -244,12 +244,17 @@
   }
 
   function drawControlTag() {
-    if (!AFP.ui.settings) return;
-    var mode = AFP.ui.settings.get('controlMode');
-    if (mode === 'stick') return;
-    var gyroOk = AFP.input.gyro && AFP.input.gyro.active();
-    var s = t('hud.gyro') + (gyroOk ? '' : ' --');
-    hudStr(2, 3, s, gyroOk ? C.C_CYAN : C.C_DIM);
+    var row = 3;
+    if (AFP.ui.settings) {
+      var mode = AFP.ui.settings.get('controlMode');
+      if (mode !== 'stick') {
+        var gyroOk = AFP.input.gyro && AFP.input.gyro.active();
+        hudStr(2, row, t('hud.gyro') + (gyroOk ? '' : ' --'), gyroOk ? C.C_CYAN : C.C_DIM);
+        row++;
+      }
+    }
+    /* 当前所在城区（生物群系） */
+    if (AFP.world.biomeLabel) hudStr(2, row, AFP.world.biomeLabel(S.camX, S.camZ), C.C_DIM);
   }
 
   /* ------------------------- 提示框（坠机 / 过关） ------------------------- */

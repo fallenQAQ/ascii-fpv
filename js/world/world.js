@@ -18,9 +18,22 @@
     return { x: x, z: z, h: h, r: h * (0.28 + 0.10 * rnd()), seed: (rnd() * 1e9) | 0 };
   }
 
-  /* 生成一个街区的街区模板（后续按坐标取模复用） */
+  /* 生成一个街区的街区模板（后续按坐标取模复用）
+     builder 是可替换的生成策略：world/biomes.js 会把它换成按生物群系生成 */
   function genBlock(bx, bz) {
     var rnd = U.mulberry32((bx * 73856093) ^ (bz * 19349663) ^ 0x5f3a71);
+    var bi = W.biomeAt ? W.biomeAt(bx, bz) : null;
+    var blk = (W.builder || defaultBuilder)(bx, bz, rnd, bi) || {};
+    blk.bx = bx; blk.bz = bz;
+    blk.biome = bi ? bi.id : 'city';
+    if (!blk.buildings) blk.buildings = [];
+    if (!blk.trees) blk.trees = [];
+    if (!blk.obs) blk.obs = [];
+    return blk;
+  }
+
+  /* 默认生成器：不加载生物群系时的通用城市 */
+  function defaultBuilder(bx, bz, rnd, bi) {
     var buildings = [], trees = [];
     var i0 = cfg.ROADW + 5, i1 = cfg.BLOCK - 3, span = i1 - i0;   // 可建面积（离路边留出人行道）
     /* 城区高度分布：形成高楼群与低矮区 */
@@ -60,7 +73,7 @@
       if (rnd() < 0.62) trees.push(mkTree(p + rnd() * 1.6, line - rnd() * 1.2, rnd));
       if (rnd() < 0.62) trees.push(mkTree(line - rnd() * 1.2, p + rnd() * 1.6, rnd));
     }
-    return { bx: bx, bz: bz, buildings: buildings, trees: trees, obs: [], biome: 'city' };
+    return { buildings: buildings, trees: trees };
   }
 
   function gen() {

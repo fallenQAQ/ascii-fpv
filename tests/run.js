@@ -113,6 +113,29 @@ group('多语言', () => {
 });
 
 /* =====================================================================
+   3.5 地图多样性（生物群系）
+   ===================================================================== */
+group('生物群系', () => {
+  const st = AFP.world.biomeStats();
+  const ids = Object.keys(st);
+  ok(ids.length >= 4, '应生成多种城区，实际 ' + ids.join('/'));
+  ids.forEach(id => ok(st[id].blocks >= 4, '「' + id + '」应成片出现，实际 ' + st[id].blocks + ' 个街区'));
+  ok(st.downtown && st.downtown.maxH > 150, '市中心应有超高楼，最高 ' + (st.downtown || {}).maxH);
+  ok(st.downtown && st.suburb && st.downtown.avgH > st.suburb.avgH * 1.8,
+    '市中心平均楼高应远高于住宅区: ' + (st.downtown || {}).avgH.toFixed(1) + ' vs ' + (st.suburb || {}).avgH.toFixed(1));
+  ok(st.park && st.park.buildings <= st.park.blocks * 2, '公园区应几乎不盖楼，实际 ' + (st.park || {}).buildings + ' 栋');
+  ok(st.park && st.suburb && (st.park.trees / st.park.blocks) > (st.suburb.trees / st.suburb.blocks),
+    '公园区树木密度应高于住宅区');
+  ok(st.industry && st.industry.avgH < 40, '工业区应为低矮厂房，平均 ' + (st.industry || {}).avgH.toFixed(1) + ' m');
+  /* 同一坐标稳定 */
+  const id1 = AFP.world.blockAt(7, 9).biome, id2 = AFP.world.blockAt(7 + 24, 9).biome;
+  eq(id1, id2, '生物群系随坐标取模无限平铺');
+  ok(typeof AFP.world.biomeLabel(100, 100) === 'string' && AFP.world.biomeLabel(100, 100).length > 0,
+    '应能取到当前城区名');
+  ok(!!AFP.world.biomeGroundOverride, '应注册地面材质覆盖（水面 / 裸土）');
+});
+
+/* =====================================================================
    4. 画面渲染
    ===================================================================== */
 group('渲染', () => {
