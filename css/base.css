@@ -1,0 +1,30 @@
+/* =====================================================================
+   ASCII FPV · 基础样式（画布 / 字体 / 全局变量）
+   ===================================================================== */
+:root{
+  --bg:#000;
+  --fg:#7dffb0;
+  --fg-dim:#2f9a63;
+  --fg-bright:#d6ffe8;
+  --amber:#ffbe46;
+  --warn:#ff5c44;
+  --panel:#000806;
+}
+html,body{
+  margin:0;padding:0;height:100%;background:var(--bg);overflow:hidden;
+  color:var(--fg);
+  font-family:"Cascadia Mono","Consolas","DejaVu Sans Mono","Courier New",monospace;
+  touch-action:none;overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+#screen{display:block;position:absolute;left:0;top:0;background:#000;touch-action:none}
+/* #ui 只承载 DOM 界面；画面全部在 canvas 上以字符绘制 */
+#ui{position:absolute;left:0;top:0;right:0;bottom:0;z-index:10;pointer-events:none}
+#ui .screen{pointer-events:auto}
+[hidden]{display:none !important}
+kbd{
+  display:inline-block;min-width:16px;text-align:center;border:1px solid var(--fg-dim);
+  border-bottom-width:2px;padding:0 5px;border-radius:3px;color:var(--fg-bright);
+  background:#04140d;font-size:12px;
+}
