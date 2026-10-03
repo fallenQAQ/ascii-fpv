@@ -86,15 +86,18 @@
       var t = e.changedTouches[i];
       var half = halfOf(t.clientX, win);
       if (split) {
-        if (half === 'left' && st.stickId === null) {
-          st.stickId = t.identifier; st.stickX0 = t.clientX; st.stickY0 = t.clientY;
-          st.stickT0 = e.timeStamp; st.moved = false; st.tapOk = true; st.active = true;
+        if (half === 'left') {
+          /* 只有第一根落在左半屏的手指才成为姿态摇杆；多余的手指忽略。
+             曾经这里是「重设摇杆基点」，会把正在操控的那根手指的基点挪走：
+             一点点抖动就变成满舵，而且先落下的手指抬起后，这根手指再也
+             控制不了姿态（它从未被登记为 stickId）。 */
+          if (st.stickId === null) {
+            st.stickId = t.identifier; st.stickX0 = t.clientX; st.stickY0 = t.clientY;
+            st.stickT0 = e.timeStamp; st.moved = false; st.tapOk = true; st.active = true;
+          }
         } else if (half === 'right' && st.thrId === null) {
           st.thrId = t.identifier; st.thrY0 = t.clientY; st.thrHold = 0;
           st.thrT0 = e.timeStamp; st.thrMoved = false; st.thrTapOk = true;
-        } else if (half === 'left') {                        // 左半屏第二指：重设摇杆基点
-          st.stickX0 = t.clientX; st.stickY0 = t.clientY; st.stickT0 = e.timeStamp;
-          st.moved = false; st.tapOk = false;
         }
       } else {
         if (st.stickId === null) {
@@ -135,6 +138,10 @@
   }
 
   function onEnd(win, e) {
+    /* 落在面板上的触摸要交回浏览器：touchend 一旦 preventDefault，
+       浏览器就不再补发 click，面板上的按钮在触屏设备上会全部失效
+       （连「闯关模式」都点不动）。onStart/onMove 已经这样放行了。 */
+    if (isUiTarget(e.target)) return;
     var st = T.st, sk = stickSrc();
     for (var i = 0; i < e.changedTouches.length; i++) {
       var t = e.changedTouches[i];
@@ -142,7 +149,7 @@
         st.stickId = null; st.active = false;
         sk.pitch = 0; sk.roll = 0;
         st.stickVX = 0; st.stickVY = 0;
-        if (st.layout !== 'split' && st.tapOk && !st.moved) st.tapOk = false;
+        /* 两种布局都应支持「轻点=暂停」：单摇杆布局下没有别的暂停手段 */
         if (st.tapOk && !st.moved && e.timeStamp - st.stickT0 < TAP_MS) tap();
       } else if (t.identifier === st.thrId) {
         st.thrId = null; st.thrHold = 0; sk.thr = 0;   // 松手油门回中（推杆式）

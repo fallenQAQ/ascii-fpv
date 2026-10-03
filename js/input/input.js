@@ -52,6 +52,8 @@
     S.axes.pitch = U.clamp(s.key.pitch + sp + gp, -1, 1);
     S.axes.roll = U.clamp(s.key.roll + sr + gr, -1, 1);
     S.axes.thr = U.clamp(s.key.thr + s.stick.thr, -1, 1);
+    /* 提示行跟着操控方式与实际生效的输入源走（例如陀螺仪刚收到第一帧数据） */
+    I.hintKey = desiredHint();
   };
 
   I.clear = function () {
@@ -81,6 +83,9 @@
     var code = ALIAS[e.code] || e.code;
     if (HANDLED[e.code]) e.preventDefault();
     S.keys[code] = 1;
+    /* 系统按键重复（按住不放）只应维持「按住」状态，不能再触发一次性动作，
+       否则按住空格会以几十赫兹反复暂停/继续，按住 ] 会把密度一路顶到上限 */
+    if (e.repeat) return;
     switch (code) {
       case 'KeyR': action('respawn'); break;
       case 'KeyH': action('hud'); break;
@@ -104,13 +109,12 @@
     I.refreshHint();
   };
 
-  /* 底部提示行随设备与设置变化 */
-  I.refreshHint = function () {
-    if (AFP.ui.settings && AFP.ui.settings.get('controlMode') !== 'stick' &&
-        AFP.input.gyro && AFP.input.gyro.active()) I.hintKey = 'hud.hint.gyro';
-    else if (!I.isTouch) I.hintKey = 'hud.hint.key';
-    else I.hintKey = (AFP.ui.settings && AFP.ui.settings.get('touchLayout') === 'single')
-      ? 'hud.hint.touch.single' : 'hud.hint.touch.split';
-    return I.hintKey;
-  };
+  /* 当前设备 / 设置下应该显示哪条底部提示 */
+  function desiredHint() {
+    var s = AFP.ui.settings;
+    if (s && s.get('controlMode') !== 'stick' && I.gyro && I.gyro.active()) return 'hud.hint.gyro';
+    if (!I.isTouch) return 'hud.hint.key';
+    return (s && s.get('touchLayout') === 'single') ? 'hud.hint.touch.single' : 'hud.hint.touch.split';
+  }
+  I.refreshHint = function () { I.hintKey = desiredHint(); return I.hintKey; };
 })(typeof window !== 'undefined' ? window : globalThis);

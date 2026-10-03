@@ -86,18 +86,21 @@
     G.zero.beta = G.raw.beta;
     G.zero.gamma = G.raw.gamma;
     G.calibrated = true;
-    G.hasData = true;
   };
 
   /* 是否正在用陀螺仪操控（界面上的指示灯用它） */
   G.active = function () {
-    return !!(G.enabled && I.src.gyro.on && mode() !== 'stick');
+    return !!(G.enabled && G.hasData && I.src.gyro.on && mode() !== 'stick');
   };
 
-  /* 每帧把姿态换算成 -1..1 的操控量 */
+  /* 每帧把姿态换算成 -1..1 的操控量。
+     只有真的收到过传感器数据才接管操控：浏览器可能声明了
+     DeviceOrientationEvent 却永远不触发（桌面 Chrome；以及在 http://
+     局域网地址下被判定为非安全上下文而屏蔽），此时必须把操控让回摇杆，
+     否则姿态输入会永远是 0，摇杆也被忽略。 */
   G.update = function () {
     var m = mode();
-    if (m === 'stick' || !G.enabled) {
+    if (m === 'stick' || !G.enabled || !G.hasData) {
       I.src.gyro.on = false; I.src.gyro.pitch = 0; I.src.gyro.roll = 0;
       return;
     }

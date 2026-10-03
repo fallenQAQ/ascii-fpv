@@ -4,20 +4,30 @@
 #ui .screen{
   position:absolute;left:0;top:0;right:0;bottom:0;
   display:none;align-items:center;justify-content:center;
-  background:rgba(0,0,0,.80);cursor:pointer;touch-action:none;
+  background:rgba(0,0,0,.80);cursor:pointer;
   padding:16px;overflow:auto;
+  /* 面板本身要能用手指上下滚（设置项比屏幕高时）；页面级滚动/缩放
+     仍由 base.css 里 body 的 touch-action:none 挡住 */
+  touch-action:pan-y;
 }
 #ui .screen.on{display:flex}
 /* 底部弹出的面板（暂停 / 坠机 / 结算），不遮挡画面上半部分的 ASCII 反馈 */
 #ui .screen.bottom{align-items:flex-end}
 #ui .screen.bottom .panel{margin-bottom:12px}
 
+/* 面板比视口还高时（窗口高度 < 533px：手机横屏、小窗口），居中的 flex
+   子项会把顶端顶到滚动区之外，而 scrollTop 最小只能到 0，标题就永远
+   滚不出来。改用 auto 外边距：有余量时照常居中，没有余量时自动塌成 0，
+   面板顶端因此始终可达。底部对齐的面板只让「上」边距 auto，保持贴底。 */
+#ui .screen > .panel{margin:auto}
+#ui .screen.bottom > .panel{margin:auto 0 0}
+
 .panel{
   border:1px solid #1f7a4d;padding:20px 26px;width:min(94vw,660px);
   background:var(--panel);
   box-shadow:0 0 40px #063d24 inset,0 0 30px #021;
   line-height:1.75;font-size:14px;cursor:default;
-  max-height:94vh;overflow:auto;
+  max-height:94vh;overflow:auto;touch-action:pan-y;
 }
 .panel h1{margin:0 0 4px;font-size:20px;color:#9dffcb;letter-spacing:3px}
 .panel h2{margin:0 0 14px;font-size:12px;color:var(--fg-dim);letter-spacing:2px;font-weight:400}
