@@ -1,0 +1,11 @@
+{
+  "name": "ascii-fpv",
+  "version": "2.0.0",
+  "private": true,
+  "description": "第一视角 ASCII 飞行游戏：全部画面由彩色 ASCII 字符排列而成，零依赖、无构建",
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "keywords": ["ascii", "game", "canvas", "flight", "roguelike"],
+  "license": "MIT"
+}
