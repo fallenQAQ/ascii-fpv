@@ -16,8 +16,11 @@
   V.cxF = 0; V.cyF = 0; V.sxS = 1; V.syS = 1; V.hTan = 1; V.vTan = 1;
   V.targetCols = 152;          // 期望列数（字号由此反推）
   V.autoCols = 152;            // 按设备自动档的期望列数
-  V.MIN_COLS = 40;             // 密度可调范围（与设置界面共用）
+  V.MIN_COLS = 84;             // 密度下限：实测保持可玩性的最小网格 84 × 25
+  V.MIN_ROWS = 25;
   V.MAX_COLS = 300;
+  V.MAX_TARGET = 800;          // 期望列数的搜索上界（字号到 7px 下限后不再变化）
+  V.minGrid = { COLS: 84, ROWS: 25 };
   V.isTouch = false;
   V.canvas = null;
   V.ctx = null;
@@ -49,6 +52,46 @@
     return V.ctx;
   }
 
+  /* 只做计算、不分配缓冲：给定期望列数，算出真正会排到屏幕上的网格 */
+  function measureGrid(target) {
+    var ctx = V.ctx, canvas = V.canvas;
+    var fpx = Math.max(7, canvas.width / (target * 0.6));
+    if (V.hasLS) ctx.letterSpacing = '0px';
+    ctx.font = fpx.toFixed(2) + 'px ' + V.FONT;
+    var adv = ctx.measureText('MMMMMMMMMM').width / 10;
+    var cellW = V.hasLS ? Math.max(4, Math.round(adv)) : Math.max(4, adv);
+    var cellH = Math.max(6, Math.round(fpx * 1.08));
+    return {
+      fpx: fpx, adv: adv, cellW: cellW, cellH: cellH,
+      COLS: Math.floor(canvas.width / cellW),
+      ROWS: Math.floor(canvas.height / cellH)
+    };
+  }
+
+  /* 把期望列数解析成「不低于可玩性下限」的网格。
+     字号越大网格越疏，所以请求低于下限时，要二分出「刚好满足 84 × 25」
+     的那个请求（而不是按固定倍率跳，否则会越过真正的下限）。
+     这是个纯函数：列数 / 行数随请求单调不减，setColumns 的二分才成立。 */
+  function meets(m) { return m.COLS >= V.MIN_COLS && m.ROWS >= V.MIN_ROWS; }
+  function resolveFor(target) {
+    var m = measureGrid(target);
+    if (meets(m)) return { target: target, m: m };
+    var hi = V.MAX_TARGET;
+    m = measureGrid(hi);
+    if (!meets(m)) return { target: hi, m: m };      // 窗口太极端，尽力而为
+    var lo = target, i;
+    for (i = 0; i < 18; i++) {
+      var mid = (lo + hi) * 0.5;
+      if (meets(measureGrid(mid))) hi = mid; else lo = mid;
+    }
+    return { target: hi, m: measureGrid(hi) };
+  }
+
+  /* 当前窗口下允许的最小密度（列最少、字最大）排出来的网格 */
+  function minGrid() {
+    return resolveFor(V.MIN_COLS).m;
+  }
+
   /* 把字体大小设成能从 canvas.width 里正好排出 V.targetCols 列 */
   function layout() {
     var ctx = V.ctx, canvas = V.canvas;
@@ -57,17 +100,18 @@
     var cssW = Math.max(320, win.innerWidth || 320), cssH = Math.max(240, win.innerHeight || 240);
     canvas.width = Math.floor(cssW * dpr); canvas.height = Math.floor(cssH * dpr);
     if (canvas.style) { canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px'; }
-    var fpx = Math.max(7, canvas.width / (V.targetCols * 0.6));
-    V.fontspec = fpx.toFixed(2) + 'px ' + V.FONT;
-    if (V.hasLS) ctx.letterSpacing = '0px';
+    var r = resolveFor(V.targetCols);
+    var m = r.m;
+    V.effTarget = Math.round(r.target * 100) / 100;   // 实际生效的期望列数（含下限抬高）
+    V.fontspec = m.fpx.toFixed(2) + 'px ' + V.FONT;
     ctx.font = V.fontspec;
-    var adv = ctx.measureText('MMMMMMMMMM').width / 10;
-    if (V.hasLS) { V.cellW = Math.max(4, Math.round(adv)); V.lspace = (V.cellW - adv).toFixed(3) + 'px'; }
-    else { V.cellW = Math.max(4, adv); V.lspace = '0px'; }
-    V.cellH = Math.max(6, Math.round(fpx * 1.08));
+    V.cellW = m.cellW;
+    V.cellH = m.cellH;
+    V.lspace = V.hasLS ? (V.cellW - m.adv).toFixed(3) + 'px' : '0px';
     V.baseY = Math.round(V.cellH * 0.80);
-    V.COLS = Math.max(V.MIN_COLS, Math.floor(canvas.width / V.cellW));
-    V.ROWS = Math.max(20, Math.floor(canvas.height / V.cellH));
+    V.COLS = Math.max(1, m.COLS);
+    V.ROWS = Math.max(1, m.ROWS);
+    V.minGrid = minGrid();                            // 供界面禁用「-」按钮
     V.offX = Math.floor((canvas.width - V.COLS * V.cellW) / 2);
     V.offY = Math.floor((canvas.height - V.ROWS * V.cellH) / 2);
     BUF.chars = new Uint16Array(V.COLS * V.ROWS);

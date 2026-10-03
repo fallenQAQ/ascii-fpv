@@ -58,7 +58,7 @@
     'settings.touch.single': 'Single stick',
     'settings.touch.sub': 'Split: left half drag = throttle, right half drag = attitude',
     'settings.density': 'Character density',
-    'settings.density.sub': 'actual {c} × {r} chars · fine tune with [ ]',
+    'settings.density.sub': 'actual {c} × {r} chars · min {mc} × {mr} · fine tune with [ ]',
     'settings.density.auto': 'Auto',
     'settings.hud': 'HUD overlay',
     'settings.collide': 'Collision',

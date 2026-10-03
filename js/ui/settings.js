@@ -118,13 +118,18 @@
     h += row(t('settings.language'), seg('lang', [
       { v: 'zh', label: '中文' }, { v: 'en', label: 'English' }
     ], vals.lang));
+    var atMinDensity = V.minGrid ? (V.COLS <= V.minGrid.COLS) : (V.COLS <= V.MIN_COLS);
     h += row(t('settings.density'),
       '<span class="seg">' +
-      '<button data-act="density:-16">-</button>' +
+      '<button data-act="density:-16"' + (atMinDensity ? ' disabled' : '') + '>-</button>' +
       '<button data-act="density:0" disabled style="min-width:78px">' + V.COLS + ' × ' + V.ROWS + '</button>' +
       '<button data-act="density:16">+</button>' +
       '<button data-act="density:auto">' + t('settings.density.auto') + '</button></span>',
-      t('settings.density.sub', { c: V.COLS, r: V.ROWS }));
+      t('settings.density.sub', {
+        c: V.COLS, r: V.ROWS,
+        mc: V.minGrid ? V.minGrid.COLS : V.MIN_COLS,
+        mr: V.minGrid ? V.minGrid.ROWS : V.MIN_ROWS
+      }));
     h += row(t('settings.hud'), toggle('hud', !!vals.hud));
 
     h += '<h3>' + t('settings.controls') + '</h3>';

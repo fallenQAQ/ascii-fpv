@@ -529,6 +529,51 @@ group('密度与键盘', () => {
   ok(A2.hook.dump().replace(/\s/g, '').length > 200, '改密度后画面仍应正常');
 });
 
+/* =====================================================================
+   7.2 密度下限（可玩性保护）
+   ===================================================================== */
+group('密度下限', () => {
+  const A = H.boot();
+  const V = A.AFP.render.view;
+  eq(V.MIN_COLS, 84, '最小列数下限应为 84');
+  eq(V.MIN_ROWS, 25, '最小行数下限应为 25');
+  ok(V.minGrid && V.minGrid.COLS >= 84 && V.minGrid.ROWS >= 25,
+    '当前窗口的最小网格应满足下限，实际 ' + V.minGrid.COLS + '×' + V.minGrid.ROWS);
+
+  /* 一路按 - 到底，实际网格不得低于下限 */
+  A.AFP.game.fsm.go('menu');
+  A.AFP.ui.screens.dispatch('settings');
+  for (let i = 0; i < 30; i++) A.AFP.ui.screens.dispatch('density:-16');
+  ok(V.COLS >= V.MIN_COLS, '连续降低密度不得少于 ' + V.MIN_COLS + ' 列，实际 ' + V.COLS);
+  ok(V.ROWS >= V.MIN_ROWS, '连续降低密度不得少于 ' + V.MIN_ROWS + ' 行，实际 ' + V.ROWS);
+  eq(V.COLS, V.minGrid.COLS, '到底时应停在最小网格');
+  const panelNow = A.doc.getElementById('ui').innerHTML;
+  ok(new RegExp('data-act="density:-16" disabled').test(panelNow), '到底后「-」按钮应禁用');
+  ok(panelNow.indexOf('下限 ' + V.minGrid.COLS + ' × ' + V.minGrid.ROWS) >= 0, '面板应说明下限');
+  /* 键盘同样到不了下限以下 */
+  const atFloor = V.COLS;
+  A.dispatch('keydown', { code: 'BracketLeft', target: { closest: function () { return null; } }, preventDefault: function () { } });
+  eq(V.COLS, atFloor, '[ 键也不得突破下限');
+  /* 直接请求更低的列数同样被挡住 */
+  const got = A.AFP.render.grid.setColumns(10);
+  ok(got >= V.MIN_COLS, 'setColumns(10) 应被抬到下限，实际 ' + got);
+  /* 画面在最小密度下仍然可用 */
+  A.AFP.ui.screens.dispatch('free');
+  A.hook.render();
+  const rows = A.hook.dump().split('\n');
+  eq(rows.length, V.ROWS, '行数应与网格一致');
+  ok(A.hook.dump().replace(/\s/g, '').length > 200, '最小密度下画面仍应有内容');
+
+  /* 极宽 / 极扁的窗口：行数下限同样生效（此时会自动加密列数） */
+  const wide = H.boot({ width: 1280, height: 360, dpr: 2 });
+  const WV = wide.AFP.render.view;
+  wide.AFP.game.fsm.go('menu');
+  wide.AFP.ui.screens.dispatch('settings');
+  for (let i = 0; i < 30; i++) wide.AFP.ui.screens.dispatch('density:-16');
+  ok(WV.COLS >= WV.MIN_COLS && WV.ROWS >= WV.MIN_ROWS,
+    '扁窗口最小网格应满足 84×25，实际 ' + WV.COLS + '×' + WV.ROWS);
+});
+
 group('设置持久化', () => {
   /* 模拟上一次会话保存过的设置，重新启动应完整恢复 */
   const app2 = H.boot({
