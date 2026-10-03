@@ -123,7 +123,7 @@ ascii-fpv/
 └── tests/
     ├── dom.js              迷你 DOM（innerHTML / querySelector / 事件）
     ├── harness.js          按 index.html 清单在 vm 沙箱中加载全部源码
-    └── run.js              318 条断言的测试入口
+    └── run.js              339 条断言的测试入口
 ```
 
 ## 开发

@@ -62,6 +62,7 @@
     crash: function () {
       return '<div class="screen bottom" data-scr="crash"><div class="panel">' +
         '<h1 data-i18n="crash.title"></h1>' +
+        '<div class="dim" data-dyn="crashReason"></div>' +
         '<div data-dyn="crashStats"></div>' +
         '<button class="btn primary" data-act="retry">' +
           '<span data-i18n="crash.retry"></span><span class="hint">R</span></button>' +
@@ -120,6 +121,8 @@
     Sc.cur = null;
   };
   Sc.isShown = function () { return !!Sc.cur; };
+  /* 某个面板此刻是否真的显示着（没有 DOM 时一律算没有） */
+  Sc.isShowing = function (name) { return !!Sc.root && Sc.cur === name; };
 
   function dyn(name) {
     if (!Sc.root) return null;
@@ -152,8 +155,10 @@
     if (hb) hb.innerHTML = helpHtml();
     var ps = dyn('pauseStats');
     if (ps) ps.innerHTML = statsHtml(runStats());
+    /* 坠机：标题只出现一次，原因单独一行，其余是数据 */
+    setDyn('crashReason', AFP.S.crashed ? crashReasonText() : '');
     var cs = dyn('crashStats');
-    if (cs) cs.innerHTML = statsHtml(runStats(), crashReasonText());
+    if (cs) cs.innerHTML = statsHtml(runStats());
     for (var i = 0; i < Sc.updaters.length; i++) {
       try { Sc.updaters[i](); } catch (e) { }
     }
@@ -179,9 +184,9 @@
       time: S.mode === 'level' && S.raceTime ? AFP.util.fmtTime(S.raceTime) : ''
     };
   }
-  function statsHtml(st, reason) {
+  /* 只列数据；标题与坠机原因由面板自己的元素负责，避免同一句话出现两次 */
+  function statsHtml(st) {
     var h = '';
-    if (reason) h += statRow(t('crash.title'), reason, true);
     if (st.time) h += statRow(t('result.time'), st.time);
     if (st.gates) h += statRow(t('result.gates'), st.gates);
     h += statRow(t('crash.dist'), st.dist);

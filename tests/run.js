@@ -778,6 +778,72 @@ group('触屏分屏', () => {
 });
 
 /* =====================================================================
+   7.4 坠机提示（不得重复）
+   ===================================================================== */
+group('坠机提示', () => {
+  const A = H.boot();
+  const AF = A.AFP, Sc = AF.ui.screens;
+  const ui = A.doc.getElementById('ui');
+  function crashWith(reason) {
+    AF.game.fsm.go('menu');
+    Sc.dispatch('free');
+    AF.S.crashed = reason; AF.S.crashReason = reason;
+    AF.S.flown = 1234; AF.S.best = 5678;
+    AF.game.fsm.go('crash');
+    A.hook.render();
+    return ui.querySelector('[data-scr="crash"]');
+  }
+
+  /* 标题只出现一次（曾经 h1 一次 + 数据行标签又一次） */
+  const zh = crashWith(2);
+  const zhTxt = zh.textContent.replace(/\s+/g, ' ');
+  eq((zhTxt.match(/坠机/g) || []).length, 1, '中文面板里「坠机」只应出现一次');
+  eq((zhTxt.match(/本次航程/g) || []).length, 1, '航程数据只应出现一次');
+  ok(/撞上楼房/.test(zhTxt), '面板应给出坠机原因');
+  ok(!/<div class="stat"[^>]*><span>坠机<\/span>/.test(zh.innerHTML), '不应再有「坠机 → 原因」这种重复行');
+
+  /* 四种坠机原因都要能显示出来 */
+  const reasons = [[1, /撞上地面/], [2, /撞上楼房/], [3, /撞上空中障碍物/], [4, /超时/]];
+  reasons.forEach(function (r) {
+    const el = crashWith(r[0]);
+    const txt = el.textContent.replace(/\s+/g, ' ');
+    ok(r[1].test(txt), '原因 ' + r[0] + ' 应显示为 ' + r[1]);
+    eq((txt.match(/坠机/g) || []).length, 1, '原因 ' + r[0] + ' 时标题也只应出现一次');
+  });
+
+  /* 英文界面同样只出现一次 */
+  Sc.dispatch('lang:en');
+  const en = crashWith(2);
+  const enTxt = en.textContent.replace(/\s+/g, ' ');
+  eq((enTxt.match(/Crashed/g) || []).length, 1, '英文面板里 Crashed 只应出现一次');
+  ok(/Hit a building/.test(enTxt), '英文面板应给出坠机原因');
+  Sc.dispatch('lang:zh');
+
+  /* 面板在场时，画面上不应再画一套 ASCII 坠机提示 */
+  crashWith(2);
+  let boxCalls = 0;
+  const origDrawCrash = AF.render.hud.drawCrash;
+  AF.render.hud.drawCrash = function () { boxCalls++; return origDrawCrash.apply(this, arguments); };
+  A.hook.render();
+  eq(boxCalls, 0, 'DOM 面板显示时不应再画 canvas 坠机提示框');
+  const dump = A.hook.dump();
+  eq(dump.indexOf('坠'), -1, 'DOM 面板显示时画面里不应重复坠机提示');
+  ok(Sc.isShowing('crash'), '此时坠机面板确实在显示');
+
+  /* 没有 DOM 面板时（离线自检 / 无界面环境）仍要有 ASCII 提示框兜底 */
+  const savedRoot = Sc.root;
+  Sc.root = null;
+  A.hook.render();
+  eq(boxCalls, 1, '没有 DOM 面板时应由 canvas 兜底画一次坠机提示框');
+  const dump2 = A.hook.dump();
+  ok(/坠/.test(dump2), '兜底提示应显示坠机标题');
+  ok(dump2.indexOf('KM') >= 0, '兜底提示应含航程数据');
+  AF.render.hud.drawCrash = origDrawCrash;
+  Sc.root = savedRoot;
+  Sc.show('crash');
+});
+
+/* =====================================================================
    8. 主循环
    ===================================================================== */
 group('主循环', () => {
@@ -837,7 +903,9 @@ group('全流程验收', () => {
   AF.game.fsm.update(1 / 120);
   eq(AF.game.fsm.cur, 'crash', '16. 撞楼进入坠机界面');
   A.hook.render();
-  ok(/CRASHED|坠/.test(A.hook.dump()), '17. 画面上有坠机提示');
+  const crashTxt = A.doc.getElementById('ui').textContent;
+  ok(/坠机/.test(crashTxt), '17. 坠机面板应显示提示');
+  ok(/撞上楼房/.test(crashTxt), '17b. 面板应说明坠机原因');
   AF.ui.screens.dispatch('retry');
   eq(AF.game.fsm.cur, 'play', '18. 重来一次');
 

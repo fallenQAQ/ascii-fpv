@@ -20,7 +20,9 @@
     if (AFP.world.obstacles) AFP.world.obstacles.draw();
     if (AFP.game.levels && fsm.isAny('play', 'pause', 'crash', 'result')) AFP.game.levels.draw();
     if (S.hudOn && fsm.isAny('play', 'pause', 'crash')) AFP.render.hud.drawHUD();
-    if (fsm.is('crash')) AFP.render.hud.drawCrash();
+    /* 坠机提示只画一套：DOM 面板在场时就用面板，画面里不再重复一遍 */
+    var Sc = AFP.ui.screens;
+    if (fsm.is('crash') && !(Sc && Sc.isShowing && Sc.isShowing('crash'))) AFP.render.hud.drawCrash();
     G.blit();
   }
 
