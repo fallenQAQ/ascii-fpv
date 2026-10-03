@@ -387,6 +387,49 @@ group('键盘输入', () => {
   eq(AFP.S.axes.roll, 0, '松开后回中');
 });
 
+group('主菜单', () => {
+  AFP.game.fsm.go('menu');
+  eq(AFP.i18n.lang, 'zh', '默认中文');
+  /* 菜单上的语言按钮：走的是 states.js 的通用动作，不能被设置处理器吞掉 */
+  AFP.ui.screens.dispatch('lang');
+  eq(AFP.i18n.lang, 'en', '主菜单语言按钮应切到英文');
+  eq(JSON.parse(app.store['asciifpv.settings']).lang, 'en', '语言选择应持久化');
+  const ui = app.doc.getElementById('ui');
+  ok(/City Run/.test(ui.textContent), '菜单应显示英文标题');
+  ok(/Campaign/.test(ui.textContent), '菜单应有闯关模式入口');
+  ok(/Free Flight/.test(ui.textContent), '菜单应有自由飞行入口');
+  ok(/Settings/.test(ui.textContent), '菜单应有设置入口');
+  ok(/Select Level/.test(ui.textContent), '菜单应有选关入口');
+  AFP.ui.screens.dispatch('lang');
+  eq(AFP.i18n.lang, 'zh', '再点一次回中文');
+  ok(/楼宇穿越/.test(app.doc.getElementById('ui').textContent), '菜单应显示中文标题');
+  /* 菜单动作 */
+  AFP.ui.screens.dispatch('settings');
+  eq(AFP.game.fsm.cur, 'settings', '菜单 → 设置');
+  AFP.ui.screens.dispatch('back');
+  eq(AFP.game.fsm.cur, 'menu', '设置 → 返回菜单');
+  AFP.ui.screens.dispatch('help');
+  eq(AFP.game.fsm.cur, 'help', '菜单 → 操作说明');
+  AFP.ui.screens.dispatch('back');
+  eq(AFP.game.fsm.cur, 'menu', '操作说明 → 返回菜单');
+});
+
+group('暂停菜单', () => {
+  AFP.ui.screens.dispatch('free');
+  eq(AFP.game.fsm.cur, 'play', '进入飞行');
+  AFP.game.onInputAction('pause');
+  eq(AFP.game.fsm.cur, 'pause', 'Space 暂停');
+  AFP.ui.screens.dispatch('settings');
+  eq(AFP.game.fsm.cur, 'settings', '暂停 → 设置');
+  AFP.ui.screens.dispatch('back');
+  eq(AFP.game.fsm.cur, 'pause', '设置应回到暂停而不是主菜单');
+  AFP.ui.screens.dispatch('restart');
+  eq(AFP.game.fsm.cur, 'play', '暂停 → 重新开始');
+  AFP.game.onInputAction('pause');
+  AFP.ui.screens.dispatch('quit');
+  eq(AFP.game.fsm.cur, 'menu', '暂停 → 返回主菜单');
+});
+
 /* =====================================================================
    7. 设置界面与持久化
    ===================================================================== */

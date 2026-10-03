@@ -259,7 +259,7 @@
     h += '<div class="stat amber"><span>' + t('result.time') + '</span><b>' + U.fmtTime(S.raceTime) + '</b></div>';
     h += '<div class="stat"><span>' + t('result.gates') + '</span><b>' + S.stats.gates + ' / ' + c.gates.length + '</b></div>';
     h += '<div class="stat"><span>' + t('result.dist') + '</span><b>' + (S.flown / 1000).toFixed(2) + ' KM</b></div>';
-    if (bt !== null) h += '<div class="stat"><span>' + t('levels.best', { t: '' }).trim() + '</span><b>' + U.fmtTime(bt) + '</b></div>';
+    if (bt !== null) h += '<div class="stat"><span>' + t('levels.bestLabel') + '</span><b>' + U.fmtTime(bt) + '</b></div>';
     if (L.nextIndex() === null) h += '<div class="dim">' + t('result.allClear') + '</div>';
     return h;
   }

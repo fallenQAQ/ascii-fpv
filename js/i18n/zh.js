@@ -29,6 +29,7 @@
     'levels.gates': '{n} 个光环',
     'levels.time': '限时 {t} 秒',
     'levels.best': '最佳 {t}',
+    'levels.bestLabel': '最佳用时',
     'levels.clear': '已通关',
     'levels.needUnlock': '先通关前一关才能解锁',
 

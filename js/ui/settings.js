@@ -157,10 +157,18 @@
   Sc.addScreen('settings', screenHtml);
 
   /* ------------------------- 交互 ------------------------- */
+  /* 只认领「带参数的设置动作」和无参数的 gyroCalib，
+     其余（如菜单里的 lang 切换按钮）留给 game/states.js 处理 */
   Sc.onAction(function (act) {
+    if (act === 'gyroCalib') {
+      if (AFP.input.gyro && AFP.input.gyro.calibrate) AFP.input.gyro.calibrate();
+      Sc.rebuild();
+      return true;
+    }
     var i = act.indexOf(':');
-    var head = i < 0 ? act : act.slice(0, i);
-    var rest = i < 0 ? '' : act.slice(i + 1);
+    if (i < 0) return false;
+    var head = act.slice(0, i);
+    var rest = act.slice(i + 1);
     switch (head) {
       case 'lang': St.set('lang', rest); return true;
       case 'controlMode': St.set('controlMode', rest); return true;
@@ -171,19 +179,13 @@
       case 'gyroInvertRoll': St.set('gyroInvertRoll', rest === '1'); return true;
       case 'density':
         var d = parseInt(rest, 10) || 0;
-        if (d === 0) St.set('density', 0);
-        else if (vals.density === 0) St.set('density', V.targetCols + d);
-        else St.set('density', V.targetCols + d);
+        St.set('density', d === 0 ? 0 : V.targetCols + d);
         return true;
       case 'gyroSens': case 'stickSens':
         var cur = vals[head], step = 0.1;
         var next = rest === '-' ? cur - step : (rest === '+' ? cur + step : cur);
         var lim = head === 'gyroSens' ? [0.3, 2.5] : [0.4, 2];
         St.set(head, Math.round(U.clamp(next, lim[0], lim[1]) * 10) / 10);
-        return true;
-      case 'gyroCalib':
-        if (AFP.input.gyro && AFP.input.gyro.calibrate) AFP.input.gyro.calibrate();
-        Sc.rebuild();
         return true;
       case 'reset':
         if (rest === 'best') { S.best = 0; S.bestSaved = 0; AFP.store.del('best'); }

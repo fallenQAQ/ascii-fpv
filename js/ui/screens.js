@@ -33,7 +33,7 @@
         '<button class="btn" data-act="settings">' +
           '<span data-i18n="menu.settings"></span></button>' +
         '<button class="btn" data-act="help">' +
-          '<span data-i18n="menu.help"></span><span class="hint" data-i18n="menu.best"></span></button>' +
+          '<span data-i18n="menu.help"></span><span class="hint">H</span></button>' +
         '<button class="btn ghost" data-act="lang">' +
           '<span data-i18n="menu.lang"></span><span class="hint" data-dyn="langHint"></span></button>' +
         '<div class="go" data-dyn="menuGo"></div>' +
@@ -139,7 +139,7 @@
   Sc.update = function () {
     if (!Sc.root) return;
     setDyn('langHint', t('lang.other'));
-    setDyn('menuGo', '');
+    setDyn('menuGo', t('menu.tagline'));
     var best = AFP.S.best || 0;
     var L = AFP.game.levels;
     var prog = L ? L.progressText() : '';

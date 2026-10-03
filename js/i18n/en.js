@@ -29,6 +29,7 @@
     'levels.gates': '{n} rings',
     'levels.time': 'limit {t}s',
     'levels.best': 'best {t}',
+    'levels.bestLabel': 'Best time',
     'levels.clear': 'cleared',
     'levels.needUnlock': 'Clear the previous level first',
 
