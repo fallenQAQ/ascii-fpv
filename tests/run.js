@@ -550,6 +550,107 @@ group('陀螺仪', () => {
 });
 
 /* =====================================================================
+   7.8 触屏：左右分屏
+   ===================================================================== */
+group('触屏分屏', () => {
+  const t = H.boot({ touch: true, width: 720, height: 1280, dpr: 2 });
+  const A = t.AFP, T = A.input.touch;
+  const V = A.render.view;
+  eq(V.isTouch, true, '应识别为触屏设备');
+  eq(V.targetCols, 96, '小屏触屏应自动降低字符密度');
+  A.input.refreshHint();
+  eq(A.input.hintKey, 'hud.hint.touch.split', '默认左右分屏提示');
+  A.ui.screens.dispatch('free');
+  eq(A.game.fsm.cur, 'play', '触屏也能开始飞行');
+
+  const noUi = { closest: function () { return null; } };
+  function fire(type, list, ts) {
+    t.dispatch(type, { changedTouches: list, timeStamp: ts || 0, target: noUi, cancelable: true });
+  }
+  function pt(id, x, y) { return { identifier: id, clientX: x, clientY: y }; }
+
+  /* 右半屏：姿态摇杆（相对起手点） */
+  fire('touchstart', [pt(1, 600, 640)], 0);
+  eq(T.st.stickId, 1, '右半屏触点应成为姿态摇杆');
+  fire('touchmove', [pt(1, 606, 646)], 20);
+  A.input.update();
+  eq(A.S.axes.roll, 0, '死区内不应有舵量');
+  eq(A.S.axes.pitch, 0, '死区内不应有舵量');
+  fire('touchmove', [pt(1, 680, 720)], 60);
+  A.input.update();
+  ok(A.S.axes.roll > 0.3, '右半屏右滑 → 右滚，实际 ' + A.S.axes.roll.toFixed(2));
+  ok(A.S.axes.pitch > 0.3, '右半屏下滑 → 抬头，实际 ' + A.S.axes.pitch.toFixed(2));
+  fire('touchend', [pt(1, 680, 720)], 90);
+  A.input.update();
+  eq(A.S.axes.roll, 0, '松手摇杆回中');
+  eq(T.st.active, false, '摇杆应释放');
+
+  /* 左半屏：油门（上滑加速，松手回中） */
+  fire('touchstart', [pt(2, 100, 900)], 100);
+  eq(T.st.thrId, 2, '左半屏触点应成为油门');
+  fire('touchmove', [pt(2, 100, 900 - 120)], 140);
+  A.input.update();
+  ok(A.S.axes.thr > 0.9, '左半屏上滑应给满油门，实际 ' + A.S.axes.thr.toFixed(2));
+  fire('touchmove', [pt(2, 100, 900 + 120)], 180);
+  A.input.update();
+  ok(A.S.axes.thr < -0.9, '左半屏下滑应减速');
+  fire('touchend', [pt(2, 100, 900)], 200);
+  A.input.update();
+  eq(A.S.axes.thr, 0, '油门松手应回中');
+
+  /* 双指：右半屏姿态 + 左半屏油门可同时生效 */
+  fire('touchstart', [pt(3, 600, 640)], 300);
+  fire('touchstart', [pt(4, 120, 900)], 310);
+  fire('touchmove', [pt(3, 660, 640), pt(4, 120, 780)], 340);
+  A.input.update();
+  ok(A.S.axes.roll > 0.3 && A.S.axes.thr > 0.5, '左右半屏应能同时操控');
+  fire('touchend', [pt(3, 660, 640), pt(4, 120, 780)], 360);
+  A.input.update();
+
+  /* 轻点 = 暂停 / 继续 */
+  eq(A.game.fsm.cur, 'play', '轻点前在飞行中');
+  fire('touchstart', [pt(5, 620, 700)], 400);
+  fire('touchend', [pt(5, 620, 700)], 480);
+  eq(A.game.fsm.cur, 'pause', '轻点右半屏应暂停');
+  fire('touchstart', [pt(6, 100, 700)], 600);
+  fire('touchend', [pt(6, 100, 700)], 660);
+  eq(A.game.fsm.cur, 'play', '轻点左半屏应继续');
+
+  /* 拖动后抬起不应被当成轻点 */
+  fire('touchstart', [pt(7, 620, 700)], 700);
+  fire('touchmove', [pt(7, 700, 760)], 730);
+  fire('touchend', [pt(7, 700, 760)], 760);
+  eq(A.game.fsm.cur, 'play', '拖动后松手不应触发暂停');
+
+  /* 单摇杆布局：第一指姿态、第二指油门 */
+  A.ui.settings.set('touchLayout', 'single');
+  A.input.refreshHint();
+  eq(A.input.hintKey, 'hud.hint.touch.single', '单摇杆提示应更新');
+  fire('touchstart', [pt(8, 120, 300)], 800);
+  eq(T.st.stickId, 8, '单摇杆布局：任意处第一指为姿态摇杆');
+  fire('touchstart', [pt(9, 500, 900)], 810);
+  fire('touchmove', [pt(8, 300, 300), pt(9, 500, 800)], 840);
+  A.input.update();
+  ok(A.S.axes.roll > 0.3, '单摇杆布局仍可操控姿态');
+  ok(A.S.axes.thr > 0.5, '单摇杆布局第二指为油门');
+  fire('touchend', [pt(8, 300, 300), pt(9, 500, 800)], 860);
+  A.input.update();
+  A.ui.settings.set('touchLayout', 'split');
+
+  /* 面板上的触摸不应被当成飞行输入 */
+  const panelTarget = { closest: function (s) { return s === '#ui .screen.on' ? {} : null; } };
+  t.dispatch('touchstart', { changedTouches: [pt(10, 600, 640)], timeStamp: 900, target: panelTarget, cancelable: true });
+  eq(T.st.stickId, null, '落在菜单面板上的触摸应交给浏览器');
+
+  /* HUD 分屏可视化不应抛异常 */
+  fire('touchstart', [pt(11, 600, 640)], 1000);
+  fire('touchmove', [pt(11, 660, 690)], 1030);
+  A.game.loop.render();
+  fire('touchend', [pt(11, 660, 690)], 1060);
+  ok(true, '分屏 HUD 绘制正常');
+});
+
+/* =====================================================================
    8. 主循环
    ===================================================================== */
 group('主循环', () => {
