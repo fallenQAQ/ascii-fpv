@@ -437,7 +437,7 @@ group('碰撞宽容度', () => {
   const A = H.boot();
   const AF = A.AFP, P = AF.game.player, HIT = AF.cfg.HIT, O = AF.world.obstacles;
   ok(HIT.GROUND < 1.2, '地面判定应比原来的 1.2m 更宽松，实际 ' + HIT.GROUND);
-  ok(HIT.WALL > 0 && HIT.WALL < 1.1, '楼房判定应从原来的外扩 1.1m 改为内缩，实际 ' + HIT.WALL);
+  eq(HIT.WALL, 0, '楼体判定不得内缩，否则能贴着屋面钻进楼体里飞');
   ok(HIT.OBST < 1, '障碍物判定球应小于可见外形，实际 ' + HIT.OBST);
 
   /* ---- 楼房：先屏蔽空中障碍物，单独验证楼体判定 ---- */
@@ -453,9 +453,13 @@ group('碰撞宽容度', () => {
 
   eq(at(ox + b.x - 0.3, midY, czc), 0, '贴墙外 0.3m（旧判定会撞）不应判撞');
   eq(at(ox + b.x - 0.6, midY, czc), 0, '墙外 0.6m 不应判撞');
-  eq(at(ox + b.x + 0.2, midY, czc), 0, '刚进墙面 0.2m 仍应宽容');
+  eq(at(ox + b.x - 0.02, midY, czc), 0, '墙外 2cm 仍算在外');
+  eq(at(ox + b.x + 0.05, midY, czc), 2, '进入墙体 5cm 就应判撞（不允许飞进楼体）');
+  eq(at(ox + b.x + 0.2, midY, czc), 2, '进入墙体 0.2m 应判撞（曾经的漏洞：从屋面边缘钻进去）');
   eq(at(ox + b.x + 1.0, midY, czc), 2, '进墙 1m 应判撞');
   eq(at(cxc, midY, czc), 2, '楼体中心应判撞');
+  eq(at(ox + b.x + 0.05, b.h + 0.3, czc), 0, '墙体上方（高过屋面）不应判撞');
+  eq(at(ox + b.x + 0.2, b.h - 0.05, czc), 2, '沿屋面边缘往下钻必须判撞');
   eq(at(cxc, b.h + 0.3, czc), 0, '擦着屋顶上方 0.3m（旧判定会撞）不应判撞');
   eq(at(cxc, b.h + 0.05, czc), 0, '刚好高过屋顶不应判撞');
   eq(at(cxc, b.h - 0.05, czc), 2, '低于屋顶平面应判撞');
@@ -478,9 +482,9 @@ group('碰撞宽容度', () => {
   const R = bb.o.hitR + HIT.SKIN;
   ok(R < bb.o.r, '气球判定球 ' + R.toFixed(2) + 'm 应小于可见气囊半径 ' + bb.o.r.toFixed(2) + 'm');
   eq(at(bp[0] + bb.o.r + 1.0, bp[1], bp[2]), 0, '气囊外 1m 不应判撞');
-  eq(at(bp[0] + bb.o.r * 0.95, bp[1], bp[2]), 0, '擦着气囊边缘不应判撞（旧判定半径 ' + (bb.o.r + 3.4).toFixed(1) + 'm）');
+  eq(at(bp[0] + R + 0.3, bp[1], bp[2]), 0, '判定球外 0.3m 不应判撞（旧判定半径 ' + (bb.o.r + 3.4).toFixed(1) + 'm）');
+  eq(at(bp[0] + R * 0.9, bp[1], bp[2]), 3, '进入判定球应判撞');
   eq(at(bp[0], bp[1], bp[2]), 3, '穿过气囊中心应判撞');
-  eq(at(bp[0] + R * 0.8, bp[1], bp[2]), 3, '进入判定球内应判撞');
 
   /* 飞行器 / 无人机：判定明显小于原来的 7.2m / 4.0m */
   const pb = AF.world.blocks.find(x => x.obs.some(o => o.type === 'plane'));
@@ -500,6 +504,56 @@ group('碰撞宽容度', () => {
 
   /* 放宽后仍然撞得进楼（不是变成穿墙） */
   eq(at(cxc, midY, czc), 2, '放宽后楼体仍然是实心的');
+});
+
+/* =====================================================================
+   6.6 楼体实心（不允许在楼体里飞）
+   ===================================================================== */
+group('楼体实心', () => {
+  const A = H.boot();
+  const AF = A.AFP, P = AF.game.player, O = AF.world.obstacles;
+  const savedHitBlock = O.hitBlock;
+  O.hitBlock = function () { return false; };          // 只考察楼体判定
+  let tested = 0, bad = 0, worst = null;
+  /* 采样 8x8 个街区里每栋楼的内部点：贴近每个面、楼体中部、屋顶下方 */
+  for (let bz = 0; bz < 8; bz++) {
+    for (let bx = 0; bx < 8; bx++) {
+      const blk = AF.world.blockAt(bx, bz), ox = bx * 64, oz = bz * 64;
+      for (const b of blk.buildings) {
+        if (b.h < 3) continue;
+        const xs = [b.x + 0.05, b.x + b.w / 2, b.x + b.w - 0.05];
+        const zs = [b.z + 0.05, b.z + b.d / 2, b.z + b.d - 0.05];
+        const ys = [1, Math.max(1, b.h * 0.35), b.h - 0.05];
+        for (const x of xs) {
+          for (const z of zs) {
+            for (const y of ys) {
+              tested++;
+              A.hook.setCam({ x: ox + x, y: y, z: oz + z, spd: 26 });
+              const r = P.collide();
+              if (r !== 2) { bad++; if (!worst) worst = { bx, bz, x: x.toFixed(2), y: y.toFixed(2), z: z.toFixed(2), got: r }; }
+            }
+          }
+        }
+      }
+    }
+  }
+  O.hitBlock = savedHitBlock;
+  ok(tested > 500, '楼体内部采样点应足够多，实际 ' + tested);
+  eq(bad, 0, '楼体内任意一点都必须判撞（采样 ' + tested + ' 点，漏判 ' + bad +
+    (worst ? '，例如 ' + JSON.stringify(worst) : '') + '）');
+
+  /* 屋面拐角那条缝曾经能钻进去：贴着墙面内侧从屋面之下到之上逐点检查 */
+  const blk = AF.world.blocks.find(b => b.buildings.length);
+  const b0 = blk.buildings[0], ox0 = blk.bx * 64, oz0 = blk.bz * 64;
+  const cz0 = oz0 + b0.z + b0.d / 2;
+  let leaks = 0;
+  for (let d = 0.01; d < Math.min(b0.w, b0.d) / 2; d += 0.05) {
+    for (let y = 1; y < b0.h; y += 0.5) {
+      A.hook.setCam({ x: ox0 + b0.x + d, y: y, z: cz0, spd: 26 });
+      if (P.collide() !== 2) leaks++;
+    }
+  }
+  eq(leaks, 0, '沿墙面内侧逐点扫描不应有漏判，实际漏判 ' + leaks + ' 点');
 });
 
 /* =====================================================================

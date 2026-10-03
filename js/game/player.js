@@ -75,8 +75,10 @@
   }
 
   /* 碰撞检测：地面 / 楼房 / 空中移动障碍物
-     判定一律比看得见的轮廓再宽松一点：
-       · 楼房：判定盒四周内缩 HIT.WALL，高度以屋顶平面为界（不再多算一节）
+     判定一律比看得见的轮廓再宽松一点，但楼体必须实心：
+       · 楼房：判定边界就是真实墙面（绝不内缩——内缩后能从屋面边缘那条缝
+         钻进楼体里飞，而相机一旦进入盒内 drawBuilding 就不再画它的墙面，
+         看起来就是穿过楼房），高度以屋顶平面为界
        · 障碍物：判定球略小于可见外形
        · 地面：HIT.GROUND 米以下才算撞地 */
   function collide() {
@@ -89,8 +91,8 @@
         var ox = (bxA + i) * B, oz = (bzA + j) * B, arr = blk.buildings;
         for (var k = 0; k < arr.length; k++) {
           var b = arr[k];
-          if (S.camX > ox + b.x + m && S.camX < ox + b.x + b.w - m &&
-              S.camZ > oz + b.z + m && S.camZ < oz + b.z + b.d - m && S.camY < b.h) return 2;
+          if (S.camX > ox + b.x - m && S.camX < ox + b.x + b.w + m &&
+              S.camZ > oz + b.z - m && S.camZ < oz + b.z + b.d + m && S.camY < b.h) return 2;
         }
       }
     }
