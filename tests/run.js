@@ -1056,6 +1056,68 @@ group('全流程验收', () => {
 });
 
 /* =====================================================================
+   10. 文档一致性（README 不得与代码脱节）
+   ===================================================================== */
+group('文档一致性', () => {
+  const fs = require('fs'), path = require('path');
+  const readme = H.readFile('README.md');
+  const A = H.boot().AFP;
+  const missing = [];
+
+  /* 目录树里写到的文件都存在 */
+  const listed = ['index.html', 'package.json', 'README.md', 'css/base.css', 'css/ui.css',
+    'js/main.js', 'js/core/ns.js', 'js/core/math.js', 'js/core/store.js', 'js/core/state.js',
+    'js/i18n/zh.js', 'js/i18n/en.js', 'js/i18n/i18n.js',
+    'js/render/palette.js', 'js/render/grid.js', 'js/render/raster.js', 'js/render/ground.js',
+    'js/render/scene.js', 'js/render/hud.js',
+    'js/world/world.js', 'js/world/biomes.js', 'js/world/obstacles.js',
+    'js/game/fsm.js', 'js/game/player.js', 'js/game/levels.js', 'js/game/states.js', 'js/game/loop.js',
+    'js/input/input.js', 'js/input/touch.js', 'js/input/gyro.js',
+    'js/ui/screens.js', 'js/ui/settings.js',
+    'tests/dom.js', 'tests/harness.js', 'tests/run.js'];
+  listed.forEach(f => { if (!fs.existsSync(path.join(H.ROOT, f))) missing.push(f); });
+  eq(missing.length, 0, 'README 提到的文件都应存在，缺失: ' + missing.join(', '));
+  /* 反过来：仓库里的每个源码文件都得写进 README */
+  const all = [];
+  (function walk(dir) {
+    for (const e of fs.readdirSync(path.join(H.ROOT, dir), { withFileTypes: true })) {
+      if (e.name === '.git') continue;
+      const rel = dir ? dir + '/' + e.name : e.name;
+      if (e.isDirectory()) walk(rel); else all.push(rel);
+    }
+  })('');
+  const notListed = all.filter(f => readme.indexOf(path.basename(f)) < 0);
+  eq(notListed.length, 0, '源码文件都应写进 README，缺: ' + notListed.join(', '));
+  eq(all.length, listed.length, 'README 目录树应覆盖全部文件（实际文件 ' + all.length + ' 个）');
+
+  /* 关键数值必须与代码一致 */
+  const V = A.render.view, HIT = A.cfg.HIT;
+  ok(readme.indexOf(V.MIN_COLS + ' × ' + V.MIN_ROWS) >= 0,
+    'README 的密度下限应写实际值 ' + V.MIN_COLS + ' × ' + V.MIN_ROWS);
+  ok(readme.indexOf('离地 ' + HIT.GROUND + ' m') >= 0, 'README 的地面判定应写实际值 ' + HIT.GROUND);
+  ok(readme.indexOf('× ' + HIT.OBST) >= 0, 'README 的气球判定系数应写实际值 ' + HIT.OBST);
+  ok(readme.indexOf(A.game.levels.count() + ' 关') >= 0, 'README 的关卡数应写实际值');
+  const L = A.game.levels;
+  const missNames = [], missGates = [];
+  for (let i = 0; i < L.count(); i++) {
+    if (readme.indexOf(L.name(i)) < 0) missNames.push(L.name(i));
+    if (readme.indexOf(String(L.defs[i].gates)) < 0) missGates.push(L.name(i));
+  }
+  eq(missNames.length, 0, 'README 关卡表应含全部关卡名，缺: ' + missNames.join(', '));
+  eq(missGates.length, 0, 'README 关卡表应含各关光环数，缺: ' + missGates.join(', '));
+  /* 生物群系与障碍物类型都要有说明 */
+  const missBiome = [];
+  ['downtown', 'midtown', 'suburb', 'industry', 'park'].forEach(id => {
+    if (readme.indexOf(A.t('biome.' + id)) < 0) missBiome.push(id);
+  });
+  eq(missBiome.length, 0, 'README 应说明全部生物群系，缺: ' + missBiome.join(', '));
+  ok(/(气球|气囊)/.test(readme) && /飞行器/.test(readme) && /无人机/.test(readme), 'README 应说明三类障碍物');
+  /* 界面、状态与存储键 */
+  eq(A.ui.screens.root.querySelectorAll('.screen').length, 7, '界面数量应为 7 块');
+  ok(readme.indexOf('asciifpv.settings') >= 0 && readme.indexOf('asciifpv.progress') >= 0, 'README 应写明存储键');
+});
+
+/* =====================================================================
    汇总
    ===================================================================== */
 console.log('');
@@ -1063,6 +1125,15 @@ console.log('  通过 ' + passed + ' / 失败 ' + failed);
 if (failures.length) {
   console.log('');
   failures.forEach(f => console.log('  ✗ ' + f));
+}
+/* README 里的断言条数若与实际不符，提示同步（不作为断言，避免自指） */
+const total = passed + failed;
+const claim = /(\d+)\s*条断言/.exec(H.readFile('README.md'));
+if (!claim) console.log('  ⚠ README 未写明断言条数');
+else if (Number(claim[1]) !== total) {
+  console.log('  ⚠ README 写的是 ' + claim[1] + ' 条断言，实际 ' + total + ' 条 —— 请同步 README');
+} else {
+  console.log('  README 断言条数与实际一致（' + total + '）');
 }
 console.log('');
 process.exit(failed ? 1 : 0);
