@@ -102,6 +102,16 @@ function boot(opts) {
   win.self = win;
   win.globalThis = win;
 
+  /* 需要时给沙箱装上 DeviceOrientationEvent（含 iOS 的授权接口） */
+  if (opts.gyro) {
+    var DOE = function DeviceOrientationEvent() { };
+    DOE.requestPermission = function () {
+      var res = opts.gyroPermission || 'granted';
+      return { then: function (f) { f(res); return { catch: function () { } }; } };
+    };
+    win.DeviceOrientationEvent = DOE;
+  }
+
   const context = vm.createContext(win);
   vm.runInContext('globalThis.window = globalThis;', context);
 

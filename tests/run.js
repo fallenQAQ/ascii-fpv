@@ -467,6 +467,89 @@ group('设置持久化', () => {
 });
 
 /* =====================================================================
+   7.5 陀螺仪
+   ===================================================================== */
+group('陀螺仪', () => {
+  const a = H.boot({ gyro: true });
+  const A = a.AFP;
+  const G = A.input.gyro;
+  ok(!!G, '应有陀螺仪模块');
+  ok(G.supported === true, '沙箱声明了 DeviceOrientationEvent，应识别为支持');
+  eq(A.ui.settings.get('controlMode'), 'stick', '默认仍是摇杆');
+
+  /* 切到陀螺仪：会走授权流程并挂上监听 */
+  A.ui.screens.dispatch('controlMode:gyro');
+  eq(G.permission, 'granted', '应取得传感器授权');
+  eq(G.enabled, true, '应挂上 deviceorientation 监听');
+
+  /* 第一帧数据即零位 */
+  G.feed({ beta: 12, gamma: -6 });
+  A.input.update();
+  near(A.S.axes.pitch, 0, 1e-6, '第一帧姿态应作为零位');
+  near(A.S.axes.roll, 0, 1e-6, '第一帧姿态应作为零位');
+
+  /* 前倾 → 抬头（pitch 正），右倾 → 右滚（roll 正） */
+  G.feed({ beta: 12 + 16, gamma: -6 + 16 });
+  A.input.update();
+  ok(A.S.axes.pitch > 0.3, '设备前倾应产生抬头，实际 ' + A.S.axes.pitch.toFixed(2));
+  ok(A.S.axes.roll > 0.3, '设备右倾应产生右滚，实际 ' + A.S.axes.roll.toFixed(2));
+  ok(G.active(), '陀螺仪应处于激活状态');
+
+  /* 满舵限幅 */
+  G.feed({ beta: 12 + 120, gamma: -6 - 120 });
+  A.input.update();
+  eq(A.S.axes.pitch, 1, '大角度应限幅到 1');
+  eq(A.S.axes.roll, -1, '大角度应限幅到 -1');
+
+  /* 反向设置 */
+  A.ui.settings.set('gyroInvertPitch', true);
+  A.ui.settings.set('gyroInvertRoll', true);
+  G.feed({ beta: 12 + 16, gamma: -6 + 16 });
+  A.input.update();
+  ok(A.S.axes.pitch < -0.3, '俯仰反向应生效');
+  ok(A.S.axes.roll < -0.3, '滚转反向应生效');
+  A.ui.settings.set('gyroInvertPitch', false);
+  A.ui.settings.set('gyroInvertRoll', false);
+
+  /* 灵敏度：同样的倾角，高灵敏度输出更大 */
+  G.feed({ beta: 12 + 8, gamma: -6 });
+  A.input.update();
+  const lowSens = A.S.axes.pitch;
+  A.ui.settings.set('gyroSens', 2.5);
+  A.input.update();
+  const highSens = A.S.axes.pitch;
+  ok(highSens > lowSens, '提高灵敏度应放大输出: ' + lowSens.toFixed(2) + ' → ' + highSens.toFixed(2));
+  A.ui.settings.set('gyroSens', 1);
+
+  /* 校准：把当前姿势设为零位 */
+  G.feed({ beta: 40, gamma: 20 });
+  G.calibrate();
+  A.input.update();
+  near(A.S.axes.pitch, 0, 1e-6, '校准后当前姿态应为零位');
+  near(A.S.axes.roll, 0, 1e-6, '校准后当前姿态应为零位');
+
+  /* 摇杆 + 陀螺仪混合模式 */
+  A.ui.screens.dispatch('controlMode:both');
+  G.feed({ beta: 40 + 16, gamma: 20 });
+  A.input.src.stick.pitch = 0.5; A.input.src.stick.roll = -0.5;
+  A.input.update();
+  ok(A.S.axes.pitch > 0.5, '混合模式应叠加摇杆与陀螺仪');
+  ok(A.S.axes.roll < 0, '混合模式应叠加摇杆与陀螺仪');
+  A.input.src.stick.pitch = 0; A.input.src.stick.roll = 0;
+  A.ui.screens.dispatch('controlMode:stick');
+  eq(G.active(), false, '回到摇杆模式应停用陀螺仪');
+
+  /* 不支持陀螺仪的设备：切到陀螺仪时摇杆仍可用 */
+  const b = H.boot({});
+  const B = b.AFP;
+  eq(B.input.gyro.supported, false, '无 DeviceOrientationEvent 应视为不支持');
+  B.ui.screens.dispatch('controlMode:gyro');
+  B.input.src.stick.pitch = 0.8;
+  B.input.update();
+  ok(B.S.axes.pitch > 0.5, '陀螺仪不可用时应自动回退摇杆');
+});
+
+/* =====================================================================
    8. 主循环
    ===================================================================== */
 group('主循环', () => {

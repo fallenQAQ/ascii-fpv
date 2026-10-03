@@ -32,12 +32,25 @@
     a.thr = (k.KeyZ ? 1 : 0) - (k.KeyX ? 1 : 0);
   }
 
-  /* 三个来源合并 → S.axes */
+  /* 三个来源合并 → S.axes
+     操控方式决定「摇杆 / 陀螺仪 / 两者」如何参与：
+       stick  只用摇杆；gyro 只用陀螺仪（陀螺仪不可用时自动回退摇杆）；
+       both   两者相加 */
   I.update = function () {
     keyAxes();
-    var s = I.src, gy = s.gyro.on ? s.gyro : { pitch: 0, roll: 0 };
-    S.axes.pitch = U.clamp(s.key.pitch + s.stick.pitch + gy.pitch, -1, 1);
-    S.axes.roll = U.clamp(s.key.roll + s.stick.roll + gy.roll, -1, 1);
+    if (I.gyro) I.gyro.update();
+    var s = I.src, gy = s.gyro;
+    var cfgS = AFP.ui.settings;
+    var mode = cfgS ? cfgS.get('controlMode') : 'stick';
+    var gyroOn = !!(gy && gy.on);
+    var useStick = (mode === 'stick') || (mode === 'both') || (mode === 'gyro' && !gyroOn);
+    var stickSens = cfgS ? (cfgS.get('stickSens') || 1) : 1;
+    var sp = useStick ? s.stick.pitch * stickSens : 0;
+    var sr = useStick ? s.stick.roll * stickSens : 0;
+    var gp = (mode !== 'stick' && gyroOn) ? gy.pitch : 0;
+    var gr = (mode !== 'stick' && gyroOn) ? gy.roll : 0;
+    S.axes.pitch = U.clamp(s.key.pitch + sp + gp, -1, 1);
+    S.axes.roll = U.clamp(s.key.roll + sr + gr, -1, 1);
     S.axes.thr = U.clamp(s.key.thr + s.stick.thr, -1, 1);
   };
 
