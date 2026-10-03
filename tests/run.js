@@ -431,6 +431,78 @@ group('暂停菜单', () => {
 });
 
 /* =====================================================================
+   6.5 碰撞宽容度（判定要比看得见的轮廓更宽松）
+   ===================================================================== */
+group('碰撞宽容度', () => {
+  const A = H.boot();
+  const AF = A.AFP, P = AF.game.player, HIT = AF.cfg.HIT, O = AF.world.obstacles;
+  ok(HIT.GROUND < 1.2, '地面判定应比原来的 1.2m 更宽松，实际 ' + HIT.GROUND);
+  ok(HIT.WALL > 0 && HIT.WALL < 1.1, '楼房判定应从原来的外扩 1.1m 改为内缩，实际 ' + HIT.WALL);
+  ok(HIT.OBST < 1, '障碍物判定球应小于可见外形，实际 ' + HIT.OBST);
+
+  /* ---- 楼房：先屏蔽空中障碍物，单独验证楼体判定 ---- */
+  const realHitBlock = O.hitBlock;
+  O.hitBlock = function () { return false; };
+
+  const blk = AF.world.blocks.find(b => b.buildings.length);
+  const b = blk.buildings[0];
+  const ox = blk.bx * 64, oz = blk.bz * 64;
+  const czc = oz + b.z + b.d / 2, cxc = ox + b.x + b.w / 2;
+  const midY = b.h * 0.5;
+  function at(x, y, z) { A.hook.setCam({ x: x, y: y, z: z, spd: 26 }); return P.collide(); }
+
+  eq(at(ox + b.x - 0.3, midY, czc), 0, '贴墙外 0.3m（旧判定会撞）不应判撞');
+  eq(at(ox + b.x - 0.6, midY, czc), 0, '墙外 0.6m 不应判撞');
+  eq(at(ox + b.x + 0.2, midY, czc), 0, '刚进墙面 0.2m 仍应宽容');
+  eq(at(ox + b.x + 1.0, midY, czc), 2, '进墙 1m 应判撞');
+  eq(at(cxc, midY, czc), 2, '楼体中心应判撞');
+  eq(at(cxc, b.h + 0.3, czc), 0, '擦着屋顶上方 0.3m（旧判定会撞）不应判撞');
+  eq(at(cxc, b.h + 0.05, czc), 0, '刚好高过屋顶不应判撞');
+  eq(at(cxc, b.h - 0.05, czc), 2, '低于屋顶平面应判撞');
+  eq(at(cxc, b.h + 40, czc), 0, '屋顶上方高空不应判撞');
+
+  /* ---- 地面 ---- */
+  eq(at(8, 1.0, -56), 0, '离地 1.0m（旧判定会撞）不应判撞');
+  eq(at(8, HIT.GROUND + 0.05, -56), 0, '刚高于地面判定线不应判撞');
+  eq(at(8, HIT.GROUND - 0.05, -56), 1, '低于地面判定线应判撞');
+  O.hitBlock = realHitBlock;
+
+  /* ---- 空中障碍物：擦着可见轮廓边走不应致命 ---- */
+  function balloon() {
+    const blk2 = AF.world.blocks.find(x => x.obs.some(o => o.type === 'balloon'));
+    return { o: blk2.obs.find(o => o.type === 'balloon'), ox: blk2.bx * 64, oz: blk2.bz * 64 };
+  }
+  AF.S.time = 0;
+  const bb = balloon(), bp = [0, 0, 0];
+  O.pos(bb.o, bb.ox, bb.oz, bp);
+  const R = bb.o.hitR + HIT.SKIN;
+  ok(R < bb.o.r, '气球判定球 ' + R.toFixed(2) + 'm 应小于可见气囊半径 ' + bb.o.r.toFixed(2) + 'm');
+  eq(at(bp[0] + bb.o.r + 1.0, bp[1], bp[2]), 0, '气囊外 1m 不应判撞');
+  eq(at(bp[0] + bb.o.r * 0.95, bp[1], bp[2]), 0, '擦着气囊边缘不应判撞（旧判定半径 ' + (bb.o.r + 3.4).toFixed(1) + 'm）');
+  eq(at(bp[0], bp[1], bp[2]), 3, '穿过气囊中心应判撞');
+  eq(at(bp[0] + R * 0.8, bp[1], bp[2]), 3, '进入判定球内应判撞');
+
+  /* 飞行器 / 无人机：判定明显小于原来的 7.2m / 4.0m */
+  const pb = AF.world.blocks.find(x => x.obs.some(o => o.type === 'plane'));
+  const po = pb.obs.find(o => o.type === 'plane');
+  const pp = [0, 0, 0];
+  O.pos(po, pb.bx * 64, pb.bz * 64, pp);
+  ok(po.hitR + HIT.SKIN < 5.2 + 2.0, '飞行器判定应比原来宽松');
+  eq(at(pp[0] + 6.5, pp[1], pp[2]), 0, '从机翼端外侧飞过不应判撞');
+  eq(at(pp[0], pp[1], pp[2]), 3, '撞上机身应判撞');
+
+  const db = AF.world.blocks.find(x => x.obs.some(o => o.type === 'drone'));
+  const doo = db.obs.find(o => o.type === 'drone');
+  const dp = [0, 0, 0];
+  O.pos(doo, db.bx * 64, db.bz * 64, dp);
+  eq(at(dp[0] + 3.0, dp[1], dp[2]), 0, '从无人机旁 3m 飞过不应判撞（旧判定 4m）');
+  eq(at(dp[0], dp[1], dp[2]), 3, '撞上无人机应判撞');
+
+  /* 放宽后仍然撞得进楼（不是变成穿墙） */
+  eq(at(cxc, midY, czc), 2, '放宽后楼体仍然是实心的');
+});
+
+/* =====================================================================
    7. 设置界面与持久化
    ===================================================================== */
 group('设置', () => {
@@ -899,7 +971,7 @@ group('全流程验收', () => {
   const blk = AF.world.blocks.find(b => b.buildings.length);
   const b = blk.buildings[0];
   AF.S.countdown = 0;
-  A.hook.setCam({ x: blk.bx * 64 + b.x + b.w / 2, y: 10, z: blk.bz * 64 + b.z + b.d / 2 });
+  A.hook.setCam({ x: blk.bx * 64 + b.x + b.w / 2, y: b.h * 0.5, z: blk.bz * 64 + b.z + b.d / 2 });
   AF.game.fsm.update(1 / 120);
   eq(AF.game.fsm.cur, 'crash', '16. 撞楼进入坠机界面');
   A.hook.render();

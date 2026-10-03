@@ -69,15 +69,19 @@
         S.stats.crashes++;
         saveBest();
       }
-    } else if (S.camY < 1.2) {
-      S.camY = 1.2; if (S.pitch < 0) S.pitch = 0;
+    } else if (S.camY < cfg.HIT.GROUND) {
+      S.camY = cfg.HIT.GROUND; if (S.pitch < 0) S.pitch = 0;
     }
   }
 
-  /* 碰撞检测：地面 / 楼房 / 空中移动障碍物 */
+  /* 碰撞检测：地面 / 楼房 / 空中移动障碍物
+     判定一律比看得见的轮廓再宽松一点：
+       · 楼房：判定盒四周内缩 HIT.WALL，高度以屋顶平面为界（不再多算一节）
+       · 障碍物：判定球略小于可见外形
+       · 地面：HIT.GROUND 米以下才算撞地 */
   function collide() {
-    if (S.camY < 1.2) return 1;
-    var B = cfg.BLOCK;
+    if (S.camY < cfg.HIT.GROUND) return 1;
+    var B = cfg.BLOCK, m = cfg.HIT.WALL;
     var bxA = Math.floor(S.camX / B), bzA = Math.floor(S.camZ / B);
     for (var j = -1; j <= 1; j++) {
       for (var i = -1; i <= 1; i++) {
@@ -85,8 +89,8 @@
         var ox = (bxA + i) * B, oz = (bzA + j) * B, arr = blk.buildings;
         for (var k = 0; k < arr.length; k++) {
           var b = arr[k];
-          if (S.camX > ox + b.x - 1.1 && S.camX < ox + b.x + b.w + 1.1 &&
-              S.camZ > oz + b.z - 1.1 && S.camZ < oz + b.z + b.d + 1.1 && S.camY < b.h + 0.7) return 2;
+          if (S.camX > ox + b.x + m && S.camX < ox + b.x + b.w - m &&
+              S.camZ > oz + b.z + m && S.camZ < oz + b.z + b.d - m && S.camY < b.h) return 2;
         }
       }
     }

@@ -56,23 +56,23 @@
         x: 10 + rnd() * (cfg.BLOCK - 20), z: 10 + rnd() * (cfg.BLOCK - 20)
       };
       if (type === 'balloon') {
-        o.r = 4 + rnd() * 3.4;                       // 气囊半径
+        o.r = 4 + rnd() * 3.4;                       // 气囊半径（可见外形）
         o.y = top + 16 + rnd() * 48;                 // 楼顶之上，且浮动后仍离地 >8m
-        o.hitR = o.r + 1.4;
+        o.hitR = o.r * cfg.HIT.OBST;                 // 判定球略小于气囊：擦着边走不致命
       } else if (type === 'plane') {
         o.R = 55 + rnd() * 55;                       // 巡航半径（不超过一个街区）
         o.dir = rnd() < 0.5 ? 1 : -1;
         o.spd = 14 + rnd() * 16;
         o.y = ntop + 15 + rnd() * 60;
         o.cx = o.x; o.cz = o.z;
-        o.hitR = 5.2;
+        o.hitR = 4.0;                                // 机身半长 5.2、翼展 ±7：判定只覆盖机身
       } else {
         o.R = 12 + rnd() * 26;
         o.dir = 1;
         o.spd = 5 + rnd() * 5;
         o.y = ntop + 8 + rnd() * 34;
         o.cx = o.x; o.cz = o.z;
-        o.hitR = 2.0;
+        o.hitR = 1.3;                                // 机身 ±1.15
       }
       obs.push(o);
     }
@@ -116,7 +116,7 @@
       var o = arr[i];
       pos(o, ox, oz, TMP);
       var dx = TMP[0] - S.camX, dy = TMP[1] - S.camY, dz = TMP[2] - S.camZ;
-      var rr = o.hitR + 2.0;
+      var rr = o.hitR + cfg.HIT.SKIN;
       if (dx * dx + dy * dy + dz * dz < rr * rr) return true;
     }
     return false;
